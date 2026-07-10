@@ -187,6 +187,22 @@ connector discovers column types from the catalog and needs no other schema know
 The PostgreSQL driver is bundled; other databases work by adding their JDBC driver to
 the classpath. Pagination uses `LIMIT`/`OFFSET` (Postgres/MySQL/H2/SQLite/MariaDB).
 
+### File backend (CSV / JSON)
+
+Set `backend.type` to `"file"` (see `backendFileExample`) to store SCIM Users and
+Groups in CSV or JSON files — useful as a read source for an existing export, or a
+sink that materializes provisioning as a file drop for downstream systems.
+
+- `format` is `csv` or `json`; each resource type is one file with a SCIM-path →
+  field mapping. Values are stringly typed and coerced to the SCIM attribute type
+  (e.g. `active` "true"/"false" → boolean) using the schema.
+- The `idColumn` holds the SCIM id (a UUID is generated on create). Group membership
+  is stored inline in `membersColumn` — a delimited id list in CSV, a JSON array in
+  JSON — and member display names are resolved from the users file.
+- The whole file is held in memory, filtered/paginated there, and written back
+  atomically (temp file + rename) on each change. Sized for provisioning volumes, not
+  high write concurrency. No external dependencies (built-in CSV reader/writer).
+
 ## Modules
 
 | Module | Contents |
@@ -195,11 +211,12 @@ the classpath. Pagination uses `LIMIT`/`OFFSET` (Postgres/MySQL/H2/SQLite/MariaD
 | `connector-okta` | Okta Management API backend (OAuth2 private-key JWT) |
 | `connector-ldap` | LDAP backend: eDirectory / Active Directory / OpenLDAP flavors, LDAPS |
 | `connector-jdbc` | JDBC/SQL backend: config-driven table/column mapping, filter pushdown (PostgreSQL bundled) |
+| `connector-file` | File backend: CSV / JSON, whole-file with atomic writes |
 | `scim-server` | JDK HttpServer front end, bearer auth, endpoints, in-memory backend, runnable shaded jar |
 
 Backends implement `com.pointblue.scim.spi.ScimBackendProvider` and are discovered
 via `ServiceLoader`; select one with `backend.type` in the config. Built-in types:
-`memory`, `okta`, `ldap`, `jdbc`.
+`memory`, `okta`, `ldap`, `jdbc`, `file`.
 
 ## Testing
 

@@ -88,6 +88,29 @@
       "membership": { "table": "group_members", "groupColumn": "group_id", "userColumn": "user_id" }
     }
   },
+  "backendFileExample": {
+    "type": "file",
+    "format": "csv",
+    "users": {
+      "file": "data/users.csv",
+      "idColumn": "id",
+      "columns": {
+        "userName": "username",
+        "name.givenName": "given_name",
+        "name.familyName": "family_name",
+        "emails[type eq \"work\"].value": "email",
+        "title": "title",
+        "active": "active"
+      }
+    },
+    "groups": {
+      "file": "data/groups.csv",
+      "idColumn": "id",
+      "displayNameColumn": "display_name",
+      "membersColumn": "members",
+      "memberDelimiter": ";"
+    }
+  },
   "limits": {
     "maxPayloadBytes": 1048576,
     "defaultPageSize": 100

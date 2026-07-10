@@ -15,6 +15,7 @@
     <module>connector-okta</module>
     <module>connector-ldap</module>
     <module>connector-jdbc</module>
+    <module>connector-file</module>
     <module>scim-server</module>
   </modules>
 
