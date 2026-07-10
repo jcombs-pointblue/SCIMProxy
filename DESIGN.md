@@ -3,6 +3,15 @@
 **Status:** Draft v1 · 2026-07-10
 **Pilot backend:** Okta Management API
 
+> **Implemented since this design.** The core, HTTP server, and SPI are built as
+> designed. Five backends now ship: `memory`, `okta` (private-key JWT and
+> client-secret), `ldap` (eDirectory / Active Directory / OpenLDAP flavors, LDAPS),
+> `jdbc` (config-driven table mapping, PostgreSQL bundled), and `file` (CSV / JSON).
+> Okta, eDirectory, Active Directory, 389 Directory Server, and PostgreSQL have been
+> validated against live systems — see [TESTING.md](TESTING.md). The section below is
+> the original Okta-pilot design; the backend-independent core (§5–§8) applies to all
+> connectors.
+
 ## 1. Purpose
 
 A standalone SCIM 2.0 server (RFC 7643/7644) that fronts platforms which do not expose

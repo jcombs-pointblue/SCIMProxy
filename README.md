@@ -6,20 +6,17 @@ only. See [DESIGN.md](DESIGN.md) for the full design.
 
 ## Status
 
-- **Done (M1/M2):** JSON module, schema registry with config-driven extensions, full
+- **Core + server:** JSON module, schema registry with config-driven extensions, full
   RFC 7644 filter grammar, full PATCH engine, Users/Groups CRUD + `.search`,
   discovery endpoints, static bearer auth, in-memory reference backend.
-- **Done (M3):** Okta connector — OAuth2 private-key JWT auth, config-driven
-  attribute mapping (incl. externalId and schema extensions to Okta custom profile
-  attributes), filter pushdown to Okta `search=` with in-memory fallback, native
-  PATCH (partial profile updates, lifecycle for `active`, group membership calls),
-  cursor pagination, rate-limit backoff. DELETE deactivates by default
-  (`deleteBehavior: "destroy"` opts into real deletion). 66 tests total.
-- **Done (LDAP):** one configurable LDAP connector covering eDirectory, Active
-  Directory, and OpenLDAP via flavor presets — including per-directory group
-  membership semantics, LDAPS, and an insecure trust-all toggle for lab
-  directories. 81 tests total.
-- **Next (M4+):** `/Bulk`, ETags, TLS listener, live smoke tests.
+- **Backends (5):** `memory`, `okta` (private-key JWT or client secret), `ldap`
+  (eDirectory / Active Directory / OpenLDAP flavors, LDAPS), `jdbc` (config-driven
+  table mapping, PostgreSQL bundled), `file` (CSV / JSON). Each rides the same SPI
+  and inherits the full protocol layer.
+- **Validated live:** Okta (Preview org), eDirectory 9.3, Active Directory, 389
+  Directory Server, PostgreSQL 17 — see [TESTING.md](TESTING.md). 105 tests total.
+- **Next:** `/Bulk`, ETags, native TLS listener; generic REST connector and more LDAP
+  flavor presets as targets arise.
 
 ## Build and run
 

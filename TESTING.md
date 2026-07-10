@@ -6,7 +6,7 @@ runbooks for validating a connector against a real target system.
 ## Automated tests
 
 ```sh
-mvn test        # 82 tests across all modules
+mvn test        # 105 tests across all modules
 ```
 
 | Module | What it covers | Test doubles |
@@ -14,7 +14,9 @@ mvn test        # 82 tests across all modules
 | `scim-core` | JSON round-trip, RFC 7644 filter parser/evaluator, PATCH engine, schema validation | none |
 | `scim-server` | full SCIM surface over real HTTP (Users/Groups CRUD, PATCH, `.search`, projection, pagination, auth, discovery); in-memory-filter fallback | `InMemoryBackend` |
 | `connector-okta` | user/group CRUD, PATCH, lifecycle, filter pushdown, pagination, auth (both JWT and client-secret), error translation | `FakeOkta` (JDK HttpServer) |
-| `connector-ldap` | eDirectory/AD/OpenLDAP flavors, membership pairs, active strategies, rename, filter escaping, LDAPS env wiring | UnboundID in-memory LDAP server (test scope) |
+| `connector-ldap` | eDirectory/AD/OpenLDAP flavors, membership pairs, active strategies, AD create ordering, RBS group exclusion, cn derivation, rename, filter escaping, LDAPS/referral/timeout env wiring | UnboundID in-memory LDAP server (test scope) |
+| `connector-jdbc` | table/column mapping, CRUD, SQL filter pushdown, injection safety, unique conflict, groups via join table, pagination | H2 in-memory (PostgreSQL mode, test scope) |
+| `connector-file` | CSV + JSON (parameterized) CRUD, RFC 4180 parsing, type coercion, filter/pagination, uniqueness, inline group membership, reads a hand-written export | temp files |
 
 No live systems are touched by `mvn test`. The connector test doubles imitate the
 real API/protocol closely enough to exercise the mapping and translation logic, but
@@ -216,12 +218,44 @@ ldapdelete -H ldaps://HOST:636 -x -D "BIND_DN" -w "$PW" "ou=scim-test,BASE"  # r
 **Last validated:** 2026-07-10 against NetIQ eDirectory 9.3 over LDAPS
 (self-signed, `insecureSkipTlsVerify`) — all steps passed, test OU removed.
 
-### Not yet validated live
+### LDAP — validated live
 
-Active Directory and OpenLDAP are covered by the in-memory suite but have not been
-run against a live server. Two things to watch on a real AD:
+- **eDirectory 9.3** over LDAPS (self-signed, `insecureSkipTlsVerify`) — full run
+  above, 2026-07-10.
+- **Active Directory** (Windows Server, `fed1.pointbluetech.com`) over LDAPS,
+  2026-07-10: browse, filter pushdown, `active`↔`userAccountControl`, group
+  membership (group-side `member` only), create (add-disabled → set `unicodePwd` →
+  enable), delete-disable. Surfaced and fixed: LDAPS-by-IP hostname verification,
+  domain-root continuation references (`referrals`), and AD create ordering.
+- **389 Directory Server 3.1.2** via the `openldap` flavor, 2026-07-10: browse,
+  get-by-id (`entryUUID`), filter pushdown (`uid`), create (with derived `cn`),
+  group create/membership, delete. Known gap: 389-ds `nsAccountLock` account disable
+  is not mapped (`activeStrategy: none`).
 
-- The default AD user filter includes `objectCategory=person` (correct on real AD;
-  the in-memory test server omits `objectCategory`, so the tests override the filter).
-- Password writes require `ldaps://` (AD only accepts `unicodePwd` over TLS); the
-  connector enforces this before attempting the create.
+Watch on a real AD: the default user filter includes `objectCategory=person`
+(correct on AD; the in-memory test server omits it, so tests override the filter),
+and password writes require `ldaps://`.
+
+---
+
+## Runbook: JDBC / SQL
+
+Configure `backend.type: "jdbc"` with the user/group tables and a SCIM-path → column
+mapping (see `backendJdbcExample` in the sample config). Validate the same scenario
+as the other backends, confirming each step with a direct SQL query.
+
+**Last validated:** 2026-07-10 against PostgreSQL 17 — browse, SQL filter pushdown,
+create, PATCH (get-apply-replace → `UPDATE`), group create/membership add-remove via
+the join table, delete; originals left intact. Not yet run against MySQL / SQL Server
+(pagination is `LIMIT`/`OFFSET`; SQL Server would need an `OFFSET/FETCH` variant).
+
+## Runbook: File (CSV / JSON)
+
+Configure `backend.type: "file"` with `format` and per-resource-type files (see
+`backendFileExample`). No external server needed — inspect the files on disk to
+verify.
+
+**Last validated:** 2026-07-10 (CSV) — reads a pre-existing export, create/PATCH
+append and update rows, group membership persisted as a delimited id list with
+display resolved from the users file. JSON format covered by the parameterized unit
+suite.
