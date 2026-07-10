@@ -14,7 +14,7 @@ only. See [DESIGN.md](DESIGN.md) for the full design.
   table mapping, PostgreSQL bundled), `file` (CSV / JSON). Each rides the same SPI
   and inherits the full protocol layer.
 - **Validated live:** Okta (Preview org), eDirectory 9.3, Active Directory, 389
-  Directory Server, PostgreSQL 17 — see [TESTING.md](TESTING.md). 105 tests total.
+  Directory Server, PostgreSQL 17 — see [TESTING.md](TESTING.md). 106 tests total.
 - **Next:** `/Bulk`, ETags, native TLS listener; generic REST connector and more LDAP
   flavor presets as targets arise.
 
@@ -99,20 +99,20 @@ proxy over a bounded scan.
   membership change can return stale membership; it settles within seconds. This is
   Okta behavior, not proxy behavior — any SCIM client sees it.
 
-### LDAP backend (eDirectory / Active Directory / OpenLDAP)
+### LDAP backend (eDirectory / Active Directory / OpenLDAP / 389ds)
 
 Set `backend.type` to `"ldap"` and pick a `flavor` (see `backendLdapExample` in the
 sample config). A flavor is only a preset — every default it sets (naming attribute,
 object classes, search filters, mappings, membership model, active-flag handling)
 can be overridden in config.
 
-| | eDirectory | Active Directory | OpenLDAP |
-|---|---|---|---|
-| userName | `cn` | `sAMAccountName` | `uid` |
-| SCIM id | `GUID` | `objectGUID` | `entryUUID` |
-| `active` | `loginDisabled` | `userAccountControl` bit 2 (other bits preserved) | none (reads true) |
-| password | `userPassword` | `unicodePwd` (requires ldaps://) | `userPassword` |
-| membership | `member`+`groupMembership`, `equivalentToMe`+`securityEquals` (both sides written) | `member` only (AD derives `memberOf`) | `member` only |
+| | eDirectory | Active Directory | OpenLDAP | 389ds |
+|---|---|---|---|---|
+| userName | `cn` | `sAMAccountName` | `uid` | `uid` |
+| SCIM id | `GUID` | `objectGUID` | `entryUUID` | `entryUUID` |
+| `active` | `loginDisabled` | `userAccountControl` bit 2 (other bits preserved) | none (reads true) | `nsAccountLock` |
+| password | `userPassword` | `unicodePwd` (requires ldaps://) | `userPassword` | `userPassword` |
+| membership | `member`+`groupMembership`, `equivalentToMe`+`securityEquals` (both sides written) | `member` only (AD derives `memberOf`) | `member` only | `member` only |
 
 Membership is modeled as **member pairs**: each pair names the group-side attribute
 (gets the user DN) and optionally the user-side attribute the connector must
@@ -130,9 +130,9 @@ RDN-source attribute changes, and the SCIM id (directory GUID) survives them;
 `deleteBehavior: "disable"` deactivates instead of deleting entries. On create, `cn`
 (required by the `person` object class) is derived from `displayName` / formatted
 name / given+family when it is not the RDN, so OpenLDAP-style flavors where `uid` is
-the RDN create valid entries. The `openldap` flavor also fits 389 Directory Server
-(entryUUID id, uid RDN, groupOfNames); note its `activeStrategy` is `none`, so
-active/disable is not mapped (389-ds `nsAccountLock` is not yet a supported strategy).
+the RDN create valid entries. Use the `389ds` flavor for 389 Directory Server /
+Red Hat DS (entryUUID id, uid RDN, groupOfNames, and `activeStrategy: nsAccountLock`
+so account enable/disable maps to the `nsAccountLock` attribute).
 
 Group **members are included in list responses** (`membersInList`, default true) so
 clients that render list rows without re-fetching each group still see membership.

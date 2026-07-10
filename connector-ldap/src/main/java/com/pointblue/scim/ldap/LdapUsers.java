@@ -48,6 +48,7 @@ final class LdapUsers implements ResourceBackend {
         attrs.add(config.guidAttr);
         attrs.add("userAccountControl");
         attrs.add("loginDisabled");
+        attrs.add("nsAccountLock");
         attrs.addAll(List.of(TIMESTAMPS));
         this.returnAttrs = attrs.toArray(new String[0]);
     }
@@ -79,6 +80,7 @@ final class LdapUsers implements ResourceBackend {
         return switch (config.activeStrategy) {
             case USER_ACCOUNT_CONTROL -> (uacFlags(entry) & 2) == 0;
             case LOGIN_DISABLED -> !"TRUE".equalsIgnoreCase(entry.first("loginDisabled"));
+            case NS_ACCOUNT_LOCK -> !"TRUE".equalsIgnoreCase(entry.first("nsAccountLock"));
             case NONE -> true;
         };
     }
@@ -104,6 +106,8 @@ final class LdapUsers implements ResourceBackend {
             }
             case LOGIN_DISABLED -> mods.add(new ModificationItem(DirContext.REPLACE_ATTRIBUTE,
                     new BasicAttribute("loginDisabled", desired ? "FALSE" : "TRUE")));
+            case NS_ACCOUNT_LOCK -> mods.add(new ModificationItem(DirContext.REPLACE_ATTRIBUTE,
+                    new BasicAttribute("nsAccountLock", desired ? "false" : "true")));
             case NONE -> log.warning("activeStrategy is 'none'; ignoring active=" + desired);
         }
         return mods;
@@ -165,6 +169,8 @@ final class LdapUsers implements ResourceBackend {
             // so always add disabled (514) and enable afterwards once a password is set.
             case USER_ACCOUNT_CONTROL -> attrs.put("userAccountControl", "514");
             case LOGIN_DISABLED -> attrs.put("loginDisabled", active ? "FALSE" : "TRUE");
+            // 389-ds: absent nsAccountLock means active, so set it only to create disabled
+            case NS_ACCOUNT_LOCK -> { if (!active) attrs.put("nsAccountLock", "true"); }
             case NONE -> { }
         }
         if (password != null && config.passwordAttr != null) attrs.put(config.passwordAttr, password);

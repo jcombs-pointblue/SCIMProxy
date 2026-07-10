@@ -6,7 +6,7 @@ runbooks for validating a connector against a real target system.
 ## Automated tests
 
 ```sh
-mvn test        # 105 tests across all modules
+mvn test        # 106 tests across all modules
 ```
 
 | Module | What it covers | Test doubles |
@@ -144,7 +144,7 @@ org left clean.
 
 ---
 
-## Runbook: LDAP (eDirectory / Active Directory / OpenLDAP)
+## Runbook: LDAP (eDirectory / Active Directory / OpenLDAP / 389ds)
 
 ### Prerequisites
 
@@ -227,10 +227,9 @@ ldapdelete -H ldaps://HOST:636 -x -D "BIND_DN" -w "$PW" "ou=scim-test,BASE"  # r
   membership (group-side `member` only), create (add-disabled → set `unicodePwd` →
   enable), delete-disable. Surfaced and fixed: LDAPS-by-IP hostname verification,
   domain-root continuation references (`referrals`), and AD create ordering.
-- **389 Directory Server 3.1.2** via the `openldap` flavor, 2026-07-10: browse,
+- **389 Directory Server 3.1.2** via the `389ds` flavor, 2026-07-10: browse,
   get-by-id (`entryUUID`), filter pushdown (`uid`), create (with derived `cn`),
-  group create/membership, delete. Known gap: 389-ds `nsAccountLock` account disable
-  is not mapped (`activeStrategy: none`).
+  group create/membership, `active`↔`nsAccountLock` toggle, delete-disable, delete.
 
 Watch on a real AD: the default user filter includes `objectCategory=person`
 (correct on AD; the in-memory test server omits it, so tests override the filter),

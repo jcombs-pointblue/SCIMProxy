@@ -20,7 +20,7 @@ public final class LdapConfig {
 
     private static final String ENT = CoreSchemas.ENTERPRISE_USER_URN;
 
-    public enum Active { USER_ACCOUNT_CONTROL, LOGIN_DISABLED, NONE }
+    public enum Active { USER_ACCOUNT_CONTROL, LOGIN_DISABLED, NS_ACCOUNT_LOCK, NONE }
 
     /**
      * One side-pair of group membership linkage. groupAttr is set on the group
@@ -77,8 +77,9 @@ public final class LdapConfig {
             case "edirectory" -> Defaults.EDIRECTORY;
             case "ad" -> Defaults.AD;
             case "openldap" -> Defaults.OPENLDAP;
+            case "389ds", "dirsrv", "directory389" -> Defaults.DIRECTORY389;
             case null -> throw new IllegalArgumentException(
-                    "ldap backend requires flavor: edirectory | ad | openldap");
+                    "ldap backend requires flavor: edirectory | ad | openldap | 389ds");
             default -> throw new IllegalArgumentException("unknown ldap flavor '" + flavor + "'");
         };
 
@@ -121,9 +122,10 @@ public final class LdapConfig {
         this.activeStrategy = switch (cfg.optString("activeStrategy", d.activeStrategy)) {
             case "userAccountControl" -> Active.USER_ACCOUNT_CONTROL;
             case "loginDisabled" -> Active.LOGIN_DISABLED;
+            case "nsAccountLock" -> Active.NS_ACCOUNT_LOCK;
             case "none" -> Active.NONE;
             default -> throw new IllegalArgumentException("activeStrategy must be "
-                    + "userAccountControl | loginDisabled | none");
+                    + "userAccountControl | loginDisabled | nsAccountLock | none");
         };
         this.passwordAttr = cfg.optString("passwordAttr", d.passwordAttr);
         String behavior = cfg.optString("deleteBehavior", "delete");
@@ -212,6 +214,14 @@ public final class LdapConfig {
                 List.of("top", "groupOfNames"), "(objectClass=groupOfNames)",
                 List.of(new MemberPair("member", null)),
                 "entryUUID", false, "none", "userPassword");
+
+        // 389 Directory Server: OpenLDAP-shaped, but account disable is nsAccountLock
+        static final Defaults DIRECTORY389 = new Defaults(
+                "uid", List.of("top", "person", "organizationalPerson", "inetOrgPerson"),
+                "(objectClass=inetOrgPerson)", common("uid"),
+                List.of("top", "groupOfNames"), "(objectClass=groupOfNames)",
+                List.of(new MemberPair("member", null)),
+                "entryUUID", false, "nsAccountLock", "userPassword");
     }
 
     // ---- helpers ----

@@ -373,6 +373,59 @@ tree falls back only if the unsupported node isn't AND-prunable).
 - Retries with jittered backoff on 5xx/connect errors for **idempotent** calls only.
 - Timeouts: connect 5 s, request 30 s (configurable).
 
+## 9A. Additional backend connectors
+
+Built after the Okta pilot; each implements the same SPI (§8) and inherits the whole
+protocol layer. Selected by `backend.type`.
+
+### LDAP (`ldap`) — eDirectory / Active Directory / OpenLDAP / 389-ds
+
+One configurable connector over JNDI (zero runtime deps). A **flavor** is a preset
+bundle of defaults, all overridable: naming attribute, object classes, search
+filters, attribute mapping, GUID attribute, membership model, and active strategy.
+
+- **Membership as configurable pairs.** Each pair names a group-side attribute (holds
+  the user DN) and optionally a user-side attribute the connector must also maintain.
+  eDirectory maintains both sides (`member`/`groupMembership`,
+  `equivalentToMe`/`securityEquals`); AD and OpenLDAP are group-side `member` only.
+- **Active/disable strategy** varies by directory and is a first-class config choice:
+  - `userAccountControl` (AD): flips bit 2, preserving other bits; create is
+    add-disabled → set `unicodePwd` (needs LDAPS) → enable, per AD's rules.
+  - `loginDisabled` (eDirectory): `TRUE`/`FALSE` on the `loginDisabled` attribute.
+  - `nsAccountLock` (389 Directory Server): `nsAccountLock` = `true` locks, `false`
+    unlocks; absent reads as active. Create sets it only when the user is inactive.
+  - `none` (plain OpenLDAP): no disable mechanism; `active` reads true.
+- **GUID** is the stable SCIM id (`objectGUID`/`GUID` binary, `entryUUID` string);
+  survives modify-DN renames triggered by a userName change.
+- **cn derivation:** `person` requires `cn`; when `uid` (not `cn`) is the RDN it is
+  derived from displayName / formatted name / given+family.
+- **Group filter** excludes iManager RBS scope objects (`rbsScope`/`rbsScope2`) for
+  eDirectory. Filters translate to RFC 4515; value-path filters fall back in-core.
+- **TLS:** LDAPS via JNDI; `insecureSkipTlsVerify` trusts any chain **and** disables
+  hostname/IP identification (via the JVM system property JNDI honors). `referrals`
+  (default `ignore`) plus tolerating the terminal `PartialResultException` handle AD
+  continuation references from domain-root searches. `connectTimeoutMs`/`readTimeoutMs`
+  are configurable.
+
+### JDBC / SQL (`jdbc`)
+
+Maps Users/Groups onto database tables via a config-driven SCIM-path → column mapping;
+column types are discovered from the JDBC catalog. Filters translate to **parameterized**
+SQL (injection-safe; string ops case-insensitive); unmapped attributes fall back
+in-core. Groups use a membership join table. Generated keys read back on insert;
+UUIDs bound as `java.util.UUID` for driver portability; pagination `LIMIT`/`OFFSET`.
+PATCH is core-emulated (`nativePatch=false`). PostgreSQL driver bundled; other DBs by
+adding their driver. This is the one connector with a runtime dependency (its driver).
+
+### File (`file`) — CSV / JSON
+
+Stores Users/Groups in CSV or JSON files: a read source for an existing export, or a
+sink materializing provisioning as a file drop. SCIM-path → field mapping; stringly
+typed values coerced to the SCIM attribute type via the schema. Membership stored
+inline (delimited id list in CSV, array in JSON). Whole file in memory, filtered
+there, written back atomically (temp + rename). Zero deps (built-in RFC 4180
+reader/writer).
+
 ## 10. Configuration
 
 Single JSON file (`config/scim-proxy.json`), `${ENV_VAR}` substitution for secrets:

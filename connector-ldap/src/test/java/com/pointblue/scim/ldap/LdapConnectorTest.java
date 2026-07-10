@@ -26,7 +26,7 @@ class LdapConnectorTest {
     private static InMemoryDirectoryServer ds;
     private static SchemaRegistry registry;
 
-    private static ResourceBackend edirUsers, edirGroups, adUsers, adGroups, olUsers, adPwUsers;
+    private static ResourceBackend edirUsers, edirGroups, adUsers, adGroups, olUsers, adPwUsers, ds389Users;
 
     @BeforeAll
     static void start() throws Exception {
@@ -65,6 +65,10 @@ class LdapConnectorTest {
                 {"flavor":"openldap",
                  "users":{"baseDn":"ou=ol-users,o=test"}}""");
         olUsers = ol.resource("User");
+        LdapBackend ds389 = backend("""
+                {"flavor":"389ds",
+                 "users":{"baseDn":"ou=ol-users,o=test"}}""");
+        ds389Users = ds389.resource("User");
     }
 
     private static LdapBackend backend(String flavorJson) {
@@ -296,6 +300,30 @@ class LdapConnectorTest {
 
         olUsers.delete(created.optString("id", null));
         assertNull(ds.getConnection().getEntry(dn));
+    }
+
+    @Test
+    void directory389ActiveMapsToNsAccountLock() throws Exception {
+        // active user created without nsAccountLock (absent = active)
+        JsonObject created = ds389Users.create(user("ds389.jane"));
+        String id = created.optString("id", null);
+        String dn = "uid=ds389.jane,ou=ol-users,o=test";
+        assertTrue(created.optBoolean("active", false));
+        assertNull(attr(dn, "nsAccountLock"), "active create leaves nsAccountLock unset");
+
+        ds389Users.patch(id, ops("[{\"op\":\"replace\",\"path\":\"active\",\"value\":false}]"));
+        assertEquals("true", attr(dn, "nsAccountLock"));
+        assertFalse(ds389Users.get(id).optBoolean("active", true));
+
+        ds389Users.patch(id, ops("[{\"op\":\"replace\",\"path\":\"active\",\"value\":true}]"));
+        assertEquals("false", attr(dn, "nsAccountLock"));
+        assertTrue(ds389Users.get(id).optBoolean("active", false));
+
+        // create disabled sets the lock up front
+        JsonObject off = ds389Users.create(Json.parseObject(
+                "{\"userName\":\"ds389.locked\",\"active\":false}"));
+        assertFalse(off.optBoolean("active", true));
+        assertEquals("true", attr("uid=ds389.locked,ou=ol-users,o=test", "nsAccountLock"));
     }
 
     @Test
