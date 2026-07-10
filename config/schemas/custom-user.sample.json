@@ -1,0 +1,9 @@
+{
+  "id": "urn:pointblue:scim:schemas:extension:custom:2.0:User",
+  "name": "PointBlueUser",
+  "description": "Example custom attributes; copy to a .json file and bind it in scim-proxy.json",
+  "attributes": [
+    { "name": "costCenter", "type": "string", "multiValued": false },
+    { "name": "badges", "type": "string", "multiValued": true }
+  ]
+}

@@ -15,3 +15,6 @@ config/schemas/*.json
 !config/schemas/*.sample.json
 *.pem
 *.p12
+
+# maven-shade-plugin artifact
+dependency-reduced-pom.xml

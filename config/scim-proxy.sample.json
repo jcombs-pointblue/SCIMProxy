@@ -1,0 +1,38 @@
+{
+  "server": {
+    "port": 8080,
+    "baseUrl": "http://localhost:8080",
+    "contextPath": "/scim/v2"
+  },
+  "auth": {
+    "bearerTokens": [
+      { "name": "idm-driver", "token": "${SCIM_TOKEN_IDM}" }
+    ]
+  },
+  "schemas": { "dir": "config/schemas" },
+  "resourceTypes": {
+    "User": {
+      "extensions": [
+        { "schema": "urn:pointblue:scim:schemas:extension:custom:2.0:User", "required": false }
+      ]
+    }
+  },
+  "backend": { "type": "memory" },
+  "backendOktaExample": {
+    "type": "okta",
+    "orgUrl": "https://acme.okta.com",
+    "clientId": "0oa1234567890abcdef",
+    "privateKeyPem": "config/okta-key.pem",
+    "scopes": ["okta.users.manage", "okta.users.read", "okta.groups.manage", "okta.groups.read"],
+    "deleteBehavior": "deactivate",
+    "memberCap": 1000,
+    "userMappings": [
+      { "scim": "externalId", "okta": "profile.externalId" },
+      { "scim": "urn:pointblue:scim:schemas:extension:custom:2.0:User:costCenter", "okta": "profile.costCenter" }
+    ]
+  },
+  "limits": {
+    "maxPayloadBytes": 1048576,
+    "defaultPageSize": 100
+  }
+}
