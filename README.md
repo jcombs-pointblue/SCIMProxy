@@ -15,7 +15,11 @@ only. See [DESIGN.md](DESIGN.md) for the full design.
   PATCH (partial profile updates, lifecycle for `active`, group membership calls),
   cursor pagination, rate-limit backoff. DELETE deactivates by default
   (`deleteBehavior: "destroy"` opts into real deletion). 66 tests total.
-- **Next (M4+):** `/Bulk`, ETags, TLS listener, live Okta smoke test.
+- **Done (LDAP):** one configurable LDAP connector covering eDirectory, Active
+  Directory, and OpenLDAP via flavor presets — including per-directory group
+  membership semantics, LDAPS, and an insecure trust-all toggle for lab
+  directories. 81 tests total.
+- **Next (M4+):** `/Bulk`, ETags, TLS listener, live smoke tests.
 
 ## Build and run
 
@@ -74,11 +78,42 @@ Filters push down to Okta `search=` when expressible (`eq`, `sw`, ranges, `and`/
 `pr`); anything else (`co`, `ne`, `not`, value-path filters) is evaluated in the
 proxy over a bounded scan.
 
+### LDAP backend (eDirectory / Active Directory / OpenLDAP)
+
+Set `backend.type` to `"ldap"` and pick a `flavor` (see `backendLdapExample` in the
+sample config). A flavor is only a preset — every default it sets (naming attribute,
+object classes, search filters, mappings, membership model, active-flag handling)
+can be overridden in config.
+
+| | eDirectory | Active Directory | OpenLDAP |
+|---|---|---|---|
+| userName | `cn` | `sAMAccountName` | `uid` |
+| SCIM id | `GUID` | `objectGUID` | `entryUUID` |
+| `active` | `loginDisabled` | `userAccountControl` bit 2 (other bits preserved) | none (reads true) |
+| password | `userPassword` | `unicodePwd` (requires ldaps://) | `userPassword` |
+| membership | `member`+`groupMembership`, `equivalentToMe`+`securityEquals` (both sides written) | `member` only (AD derives `memberOf`) | `member` only |
+
+Membership is modeled as **member pairs**: each pair names the group-side attribute
+(gets the user DN) and optionally the user-side attribute the connector must
+maintain (gets the group DN). That is the whole difference between the directory
+types, so a new directory is usually just a different `memberPairs` list.
+
+Other behaviors: SCIM filters translate to RFC 4515 LDAP filters (value-path
+filters fall back to in-memory evaluation); renames happen via modify-DN when the
+RDN-source attribute changes, and the SCIM id (directory GUID) survives them;
+`deleteBehavior: "disable"` deactivates instead of deleting entries.
+
+**TLS:** use an `ldaps://` URL. For lab directories with self-signed certificates,
+`"insecureSkipTlsVerify": true` installs a trust-all socket factory and disables
+hostname verification — never use it in production.
+
 ## Modules
 
 | Module | Contents |
 |---|---|
 | `scim-core` | JSON, resource model, schema registry/validator, filter parser+evaluator, PATCH engine, backend SPI |
+| `connector-okta` | Okta Management API backend (OAuth2 private-key JWT) |
+| `connector-ldap` | LDAP backend: eDirectory / Active Directory / OpenLDAP flavors, LDAPS |
 | `scim-server` | JDK HttpServer front end, bearer auth, endpoints, in-memory backend, runnable shaded jar |
 
 Backends implement `com.pointblue.scim.spi.ScimBackendProvider` and are discovered

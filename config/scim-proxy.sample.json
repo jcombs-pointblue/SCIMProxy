@@ -31,6 +31,30 @@
       { "scim": "urn:pointblue:scim:schemas:extension:custom:2.0:User:costCenter", "okta": "profile.costCenter" }
     ]
   },
+  "backendLdapExample": {
+    "type": "ldap",
+    "url": "ldaps://edir.example.com:636",
+    "bindDn": "cn=scim-proxy,ou=services,o=acme",
+    "bindPassword": "${LDAP_BIND_PW}",
+    "insecureSkipTlsVerify": false,
+    "flavor": "edirectory",
+    "users": {
+      "baseDn": "ou=users,o=acme",
+      "mappings": [
+        { "scim": "externalId", "ldap": "workforceID" },
+        { "scim": "urn:pointblue:scim:schemas:extension:custom:2.0:User:costCenter", "ldap": "costCenter" }
+      ]
+    },
+    "groups": {
+      "baseDn": "ou=groups,o=acme",
+      "memberPairs": [
+        { "group": "member", "user": "groupMembership" },
+        { "group": "equivalentToMe", "user": "securityEquals" }
+      ]
+    },
+    "deleteBehavior": "disable",
+    "memberCap": 1000
+  },
   "limits": {
     "maxPayloadBytes": 1048576,
     "defaultPageSize": 100

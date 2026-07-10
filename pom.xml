@@ -13,6 +13,7 @@
   <modules>
     <module>scim-core</module>
     <module>connector-okta</module>
+    <module>connector-ldap</module>
     <module>scim-server</module>
   </modules>
 

@@ -26,6 +26,12 @@
       <scope>runtime</scope>
     </dependency>
     <dependency>
+      <groupId>com.pointblue.scim</groupId>
+      <artifactId>connector-ldap</artifactId>
+      <version>${project.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <scope>test</scope>
