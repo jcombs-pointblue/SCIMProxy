@@ -1,0 +1,17 @@
+# build output
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+
+# local deployment config and keys (samples are tracked; real ones are not)
+config/scim-proxy.json
+config/schemas/*.json
+!config/schemas/*.sample.json
+*.pem
+*.p12
