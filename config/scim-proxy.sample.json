@@ -53,7 +53,10 @@
       ]
     },
     "deleteBehavior": "disable",
-    "memberCap": 1000
+    "memberCap": 1000,
+    "pageSize": 500,
+    "connectTimeoutMs": 5000,
+    "readTimeoutMs": 30000
   },
   "limits": {
     "maxPayloadBytes": 1048576,

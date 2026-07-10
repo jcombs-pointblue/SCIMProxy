@@ -51,4 +51,21 @@ class TlsConfigTest {
         assertNotNull(TrustAllSocketFactory.getDefault());
         assertTrue(new TrustAllSocketFactory().getDefaultCipherSuites().length > 0);
     }
+
+    @Test
+    void timeoutsDefaultAndOverride() {
+        Hashtable<String, Object> def = LdapConnections.buildEnv(
+                config("ldaps://dir.example.com:636", false));
+        assertEquals("5000", def.get("com.sun.jndi.ldap.connect.timeout"));
+        assertEquals("30000", def.get("com.sun.jndi.ldap.read.timeout"));
+
+        JsonObject cfg = Json.parseObject("""
+                {"type":"ldap","flavor":"edirectory",
+                 "url":"ldaps://dir.example.com:636","bindDn":"cn=a,o=t","bindPassword":"pw",
+                 "connectTimeoutMs":8000,"readTimeoutMs":120000,
+                 "users":{"baseDn":"ou=users,o=t"}}""");
+        Hashtable<String, Object> env = LdapConnections.buildEnv(new LdapConfig(cfg));
+        assertEquals("8000", env.get("com.sun.jndi.ldap.connect.timeout"));
+        assertEquals("120000", env.get("com.sun.jndi.ldap.read.timeout"));
+    }
 }

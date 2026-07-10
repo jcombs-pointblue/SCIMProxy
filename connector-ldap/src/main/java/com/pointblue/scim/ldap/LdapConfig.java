@@ -61,6 +61,8 @@ public final class LdapConfig {
     public final boolean deleteDisablesOnly;
     public final int memberCap;
     public final int pageSize;
+    public final int connectTimeoutMs;
+    public final int readTimeoutMs;
 
     public LdapConfig(JsonObject cfg) {
         this.url = require(cfg, "url");
@@ -131,6 +133,9 @@ public final class LdapConfig {
         };
         this.memberCap = intOpt(cfg, "memberCap", 1000);
         this.pageSize = intOpt(cfg, "pageSize", 500);
+        this.connectTimeoutMs = intOpt(cfg, "connectTimeoutMs", 5000);
+        // read timeout bounds any single LDAP operation; raise it for slow/broad subtree searches
+        this.readTimeoutMs = intOpt(cfg, "readTimeoutMs", 30000);
     }
 
     // ---- flavor presets ----

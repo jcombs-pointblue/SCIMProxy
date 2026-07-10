@@ -30,8 +30,8 @@ final class LdapConnections {
         env.put(Context.SECURITY_AUTHENTICATION, "simple");
         env.put(Context.SECURITY_PRINCIPAL, config.bindDn);
         env.put(Context.SECURITY_CREDENTIALS, config.bindPassword);
-        env.put("com.sun.jndi.ldap.connect.timeout", "5000");
-        env.put("com.sun.jndi.ldap.read.timeout", "30000");
+        env.put("com.sun.jndi.ldap.connect.timeout", String.valueOf(config.connectTimeoutMs));
+        env.put("com.sun.jndi.ldap.read.timeout", String.valueOf(config.readTimeoutMs));
         env.put("com.sun.jndi.ldap.connect.pool", "true");
         // GUID-bearing attributes must come back as byte[] (string GUIDs like entryUUID must not)
         String binary = "objectGUID GUID objectSid";

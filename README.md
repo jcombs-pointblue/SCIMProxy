@@ -131,6 +131,14 @@ RDN-source attribute changes, and the SCIM id (directory GUID) survives them;
 `"insecureSkipTlsVerify": true` installs a trust-all socket factory and disables
 hostname verification — never use it in production.
 
+**Timeouts and paging:** `connectTimeoutMs` (default 5000), `readTimeoutMs`
+(default 30000), and `pageSize` (default 500) are configurable per backend. Raise
+`readTimeoutMs` when searching very large or partition-spanning subtrees, where the
+directory may take tens of seconds to assemble the first page. Point `users.baseDn`
+at the narrowest container that holds the entries you need — an unfiltered browse of
+a huge root scope is slow regardless of timeout, though filtered searches still push
+down and stay fast.
+
 ## Modules
 
 | Module | Contents |
