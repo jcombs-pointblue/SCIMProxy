@@ -25,8 +25,9 @@ Areas especially worth scrutiny:
 
 ## Supported versions
 
-The project is pre-1.0 (`0.1.0-SNAPSHOT`); fixes land on `main`. Pin to a commit for
-reproducible builds until a tagged release is published.
+Security fixes are applied to the latest `1.x` release and land on `main`. Pin to a
+tagged release (e.g. `v1.0.0`) for reproducible builds, and upgrade to the newest
+`1.x` to receive fixes.
 
 ## Operational notes
 
