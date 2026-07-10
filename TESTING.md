@@ -6,7 +6,7 @@ runbooks for validating a connector against a real target system.
 ## Automated tests
 
 ```sh
-mvn test        # 106 tests across all modules
+mvn test        # 113 tests across all modules
 ```
 
 | Module | What it covers | Test doubles |
