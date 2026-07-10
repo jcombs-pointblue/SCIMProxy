@@ -222,7 +222,7 @@ ldapdelete -H ldaps://HOST:636 -x -D "BIND_DN" -w "$PW" "ou=scim-test,BASE"  # r
 
 - **eDirectory 9.3** over LDAPS (self-signed, `insecureSkipTlsVerify`) — full run
   above, 2026-07-10.
-- **Active Directory** (Windows Server, `fed1.pointbluetech.com`) over LDAPS,
+- **Active Directory** (Windows Server, a lab domain) over LDAPS,
   2026-07-10: browse, filter pushdown, `active`↔`userAccountControl`, group
   membership (group-side `member` only), create (add-disabled → set `unicodePwd` →
   enable), delete-disable. Surfaced and fixed: LDAPS-by-IP hostname verification,
