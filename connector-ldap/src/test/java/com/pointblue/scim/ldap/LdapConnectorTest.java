@@ -298,6 +298,22 @@ class LdapConnectorTest {
         assertNull(ds.getConnection().getEntry(dn));
     }
 
+    @Test
+    void openldapDerivesCnWhenUidIsRdn() throws Exception {
+        // uid is the RDN, so nothing maps to cn — but 'person' requires it. Derive from name.
+        olUsers.create(Json.parseObject("""
+                {"userName":"ol.cn","name":{"givenName":"Cee","familyName":"Enn"}}"""));
+        var e = ds.getConnection().getEntry("uid=ol.cn,ou=ol-users,o=test", "cn", "sn");
+        assertEquals("Cee Enn", e.getAttributeValue("cn"));
+        assertEquals("Enn", e.getAttributeValue("sn"));
+
+        // displayName wins when present
+        olUsers.create(Json.parseObject("""
+                {"userName":"ol.cn2","displayName":"Display Name","name":{"familyName":"X"}}"""));
+        assertEquals("Display Name",
+                ds.getConnection().getEntry("uid=ol.cn2,ou=ol-users,o=test", "cn").getAttributeValue("cn"));
+    }
+
     // ---- cross-cutting ----
 
     @Test

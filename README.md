@@ -130,7 +130,12 @@ exclusions.
 Other behaviors: SCIM filters translate to RFC 4515 LDAP filters (value-path
 filters fall back to in-memory evaluation); renames happen via modify-DN when the
 RDN-source attribute changes, and the SCIM id (directory GUID) survives them;
-`deleteBehavior: "disable"` deactivates instead of deleting entries.
+`deleteBehavior: "disable"` deactivates instead of deleting entries. On create, `cn`
+(required by the `person` object class) is derived from `displayName` / formatted
+name / given+family when it is not the RDN, so OpenLDAP-style flavors where `uid` is
+the RDN create valid entries. The `openldap` flavor also fits 389 Directory Server
+(entryUUID id, uid RDN, groupOfNames); note its `activeStrategy` is `none`, so
+active/disable is not mapped (389-ds `nsAccountLock` is not yet a supported strategy).
 
 Group **members are included in list responses** (`membersInList`, default true) so
 clients that render list rows without re-fetching each group still see membership.

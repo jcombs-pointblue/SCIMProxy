@@ -151,6 +151,13 @@ final class LdapUsers implements ResourceBackend {
         attrs.put(oc);
         values.forEach((k, v) -> { if (v != null) attrs.put(k, v); });
 
+        // the 'person' object class requires cn; when uid (not cn) is the RDN nothing
+        // maps to it, so derive one. No-op for flavors where cn is the RDN (already set).
+        if (attrs.get("cn") == null) {
+            String cn = deriveCn(resource, rdnValue);
+            if (cn != null) attrs.put("cn", cn);
+        }
+
         boolean active = resource.optBoolean("active", true);
         boolean uacStrategy = config.activeStrategy == LdapConfig.Active.USER_ACCOUNT_CONTROL;
         switch (config.activeStrategy) {
@@ -287,5 +294,19 @@ final class LdapUsers implements ResourceBackend {
             if (e.getKey().equalsIgnoreCase(key)) return e.getValue();
         }
         return null;
+    }
+
+    /** Best available common name: displayName, formatted, "given family", else the RDN value. */
+    private static String deriveCn(JsonObject resource, String rdnValue) {
+        String display = resource.optString("displayName", null);
+        if (display != null && !display.isBlank()) return display;
+        if (resource.getIgnoreCase("name") instanceof JsonObject name) {
+            String formatted = name.optString("formatted", null);
+            if (formatted != null && !formatted.isBlank()) return formatted;
+            String full = (name.optString("givenName", "") + " "
+                    + name.optString("familyName", "")).trim();
+            if (!full.isBlank()) return full;
+        }
+        return rdnValue;
     }
 }
