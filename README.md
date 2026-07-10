@@ -63,13 +63,25 @@ validated on writes, and addressable in filters and PATCH paths
 Set `backend.type` to `"okta"` (see the `backendOktaExample` block in the sample
 config). Setup on the Okta side:
 
-1. Create an **API Services** app (client credentials), grant it the scopes
+1. Create an **API Services** app. Grant it the **Okta API Scopes**
    `okta.users.manage`, `okta.users.read`, `okta.groups.manage`, `okta.groups.read`.
-2. Register a public key on the app and keep the private key as a **PKCS#8 PEM**
-   (`openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt -out okta-key.pem`);
-   point `privateKeyPem` at it.
-3. To round-trip `externalId` or custom extension attributes, add the matching
+2. On the app's **Admin roles** tab, assign an admin role (Super Administrator for
+   a test org). Without it, tokens issue fine but every API call returns 403.
+3. Set **Client authentication** to **Public key / Private key** and register a
+   public key. Generate the keypair as PKCS#8:
+   `openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt -out okta-key.pem`, then
+   register the **public** half. Point `privateKeyPem` at the private PEM.
+4. If the app has **Require DPoP** enabled, turn it off — the connector does not
+   implement DPoP.
+5. To round-trip `externalId` or custom extension attributes, add the matching
    **custom profile attributes** in Okta and map them under `userMappings`.
+
+**Auth method matters.** The Okta Org Authorization Server *requires*
+`private_key_jwt` for client-credentials — a **client secret is rejected**
+(`invalid_client: must use the private_key_jwt token_endpoint_auth_method`). The
+connector also supports `clientSecret` (`client_secret_post`) for custom
+authorization servers and quick pilots, but for provisioning against an Okta org
+use the private key. See [caveats](#okta-caveats-learned-from-live-validation).
 
 Semantics: SCIM `id` is the Okta user id; `active` maps to Okta status and drives
 activate/deactivate/unsuspend lifecycle calls; `DELETE /Users/{id}` deactivates
@@ -77,6 +89,18 @@ only unless `deleteBehavior` is `"destroy"`; only `OKTA_GROUP` groups are manage
 Filters push down to Okta `search=` when expressible (`eq`, `sw`, ranges, `and`/`or`,
 `pr`); anything else (`co`, `ne`, `not`, value-path filters) is evaluated in the
 proxy over a bounded scan.
+
+#### Okta caveats (learned from live validation)
+
+- **Register the key as a JWK, not PEM.** Okta's "Add key" box parses **JSON** — a
+  PEM paste fails with "Unable to parse JSON". Convert with any JWK tool (or the
+  helper in [TESTING.md](TESTING.md)).
+- **Okta assigns its own Key ID.** When you register a JWK, Okta may replace your
+  `kid`. The connector omits `kid` by default so Okta matches the signature against
+  its registered keys; only set the `kid` config field if you know it matches.
+- **Group membership is eventually consistent.** A read immediately after a
+  membership change can return stale membership; it settles within seconds. This is
+  Okta behavior, not proxy behavior — any SCIM client sees it.
 
 ### LDAP backend (eDirectory / Active Directory / OpenLDAP)
 
@@ -118,3 +142,9 @@ hostname verification — never use it in production.
 
 Backends implement `com.pointblue.scim.spi.ScimBackendProvider` and are discovered
 via `ServiceLoader`; select one with `backend.type` in the config.
+
+## Testing
+
+`mvn test` runs 82 unit/integration tests (in-memory backends, FakeOkta, an
+in-memory LDAP server). For live end-to-end validation against a real Okta org or
+LDAP directory — including the setup gotchas above — see **[TESTING.md](TESTING.md)**.
