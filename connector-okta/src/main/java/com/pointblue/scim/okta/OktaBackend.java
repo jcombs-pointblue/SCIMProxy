@@ -27,7 +27,9 @@ public final class OktaBackend implements ScimBackend {
         HttpClient http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
-        TokenSource tokens = new TokenSource(http, new PrivateKeyJwt(Path.of(config.privateKeyPem)),
+        PrivateKeyJwt jwt = config.privateKeyPem == null
+                ? null : new PrivateKeyJwt(Path.of(config.privateKeyPem), config.kid);
+        TokenSource tokens = new TokenSource(http, jwt, config.clientSecret,
                 config.clientId, config.tokenUrl(), config.scopes);
         this.client = new OktaClient(http, tokens, config.orgUrl);
         UserMapper mapper = new UserMapper(config.userMappings);

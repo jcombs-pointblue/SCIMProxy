@@ -106,6 +106,22 @@ class OktaConnectorTest {
     }
 
     @Test
+    void clientSecretAuthIsSupported() {
+        JsonObject config = Json.parseObject("""
+                {"type":"okta","orgUrl":"%s","clientId":"0oasecret",
+                 "clientSecret":"s3cret-value"}""".formatted(okta.url()));
+        OktaBackend secretBackend = new OktaBackend(config, SchemaRegistry.withDefaults());
+        okta.lastAssertion = null;
+        secretBackend.healthCheck();
+        assertEquals("s3cret-value", okta.lastClientSecret);
+        assertNull(okta.lastAssertion, "no JWT assertion in client_secret mode");
+
+        assertThrows(IllegalArgumentException.class, () -> new OktaBackend(Json.parseObject("""
+                {"type":"okta","orgUrl":"%s","clientId":"x"}""".formatted(okta.url())),
+                SchemaRegistry.withDefaults()), "one of privateKeyPem/clientSecret is required");
+    }
+
+    @Test
     void createRoundTripsMappedAndExtensionAttributes() {
         JsonObject created = createUser("bjensen");
         String id = created.optString("id", null);

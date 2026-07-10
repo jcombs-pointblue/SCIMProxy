@@ -12,7 +12,9 @@ public final class OktaConfig {
 
     final String orgUrl;
     final String clientId;
-    final String privateKeyPem;      // path to a PKCS#8 PEM file
+    final String privateKeyPem;      // path to a PKCS#8 PEM file (private_key_jwt), or
+    final String clientSecret;       // client_secret_post — exactly one of the two
+    final String kid;                // key id for private_key_jwt; optional
     final String scopes;
     final boolean destroyOnDelete;   // default false: DELETE deactivates only
     final int memberCap;             // max group members materialized on GET
@@ -23,7 +25,14 @@ public final class OktaConfig {
     OktaConfig(JsonObject cfg) {
         this.orgUrl = trimSlash(require(cfg, "orgUrl"));
         this.clientId = require(cfg, "clientId");
-        this.privateKeyPem = require(cfg, "privateKeyPem");
+        this.privateKeyPem = cfg.optString("privateKeyPem", null);
+        this.clientSecret = cfg.optString("clientSecret", null);
+        if ((privateKeyPem == null) == (clientSecret == null)) {
+            throw new IllegalArgumentException(
+                    "okta backend config requires exactly one of 'privateKeyPem' (private_key_jwt) "
+                    + "or 'clientSecret' (client_secret_post)");
+        }
+        this.kid = cfg.optString("kid", null);
         this.scopes = cfg.optString("scopes", null) != null
                 ? joinScopes(cfg.get("scopes"))
                 : "okta.users.manage okta.users.read okta.groups.manage okta.groups.read";

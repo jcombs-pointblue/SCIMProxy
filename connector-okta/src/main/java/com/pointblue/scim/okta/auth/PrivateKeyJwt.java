@@ -26,9 +26,15 @@ public final class PrivateKeyJwt {
     private static final Base64.Encoder B64URL = Base64.getUrlEncoder().withoutPadding();
 
     private final PrivateKey key;
+    private final String kid; // key id registered on the Okta app; null when the app has one key
 
     public PrivateKeyJwt(Path pemFile) {
+        this(pemFile, null);
+    }
+
+    public PrivateKeyJwt(Path pemFile, String kid) {
         this.key = loadPkcs8(pemFile);
+        this.kid = kid;
     }
 
     private static PrivateKey loadPkcs8(Path pemFile) {
@@ -52,6 +58,7 @@ public final class PrivateKeyJwt {
     public String assertion(String clientId, String tokenUrl) {
         long now = Instant.now().getEpochSecond();
         JsonObject header = new JsonObject().put("alg", "RS256").put("typ", "JWT");
+        if (kid != null) header.put("kid", kid);
         JsonObject claims = new JsonObject()
                 .put("iss", clientId)
                 .put("sub", clientId)

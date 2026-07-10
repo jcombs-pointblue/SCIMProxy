@@ -20,7 +20,8 @@ public final class TokenSource {
     private static final String ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
     private final HttpClient http;
-    private final PrivateKeyJwt jwt;
+    private final PrivateKeyJwt jwt;      // exactly one of jwt / clientSecret is set
+    private final String clientSecret;
     private final String clientId;
     private final String tokenUrl;
     private final String scopes;
@@ -28,9 +29,11 @@ public final class TokenSource {
     private String token;
     private Instant expiresAt = Instant.EPOCH;
 
-    public TokenSource(HttpClient http, PrivateKeyJwt jwt, String clientId, String tokenUrl, String scopes) {
+    public TokenSource(HttpClient http, PrivateKeyJwt jwt, String clientSecret,
+                       String clientId, String tokenUrl, String scopes) {
         this.http = http;
         this.jwt = jwt;
+        this.clientSecret = clientSecret;
         this.clientId = clientId;
         this.tokenUrl = tokenUrl;
         this.scopes = scopes;
@@ -38,10 +41,13 @@ public final class TokenSource {
 
     public synchronized String bearer() {
         if (token != null && Instant.now().isBefore(expiresAt)) return token;
-        String form = "grant_type=client_credentials"
-                + "&scope=" + url(scopes)
-                + "&client_assertion_type=" + url(ASSERTION_TYPE)
-                + "&client_assertion=" + url(jwt.assertion(clientId, tokenUrl));
+        String form = "grant_type=client_credentials&scope=" + url(scopes);
+        if (jwt != null) {
+            form += "&client_assertion_type=" + url(ASSERTION_TYPE)
+                    + "&client_assertion=" + url(jwt.assertion(clientId, tokenUrl));
+        } else {
+            form += "&client_id=" + url(clientId) + "&client_secret=" + url(clientSecret);
+        }
         HttpRequest req = HttpRequest.newBuilder(URI.create(tokenUrl))
                 .timeout(Duration.ofSeconds(30))
                 .header("Content-Type", "application/x-www-form-urlencoded")

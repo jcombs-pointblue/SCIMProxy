@@ -39,6 +39,7 @@ final class FakeOkta {
     final Map<String, Set<String>> members = new LinkedHashMap<>();
     volatile String lastSearch;
     volatile String lastAssertion;
+    volatile String lastClientSecret;
 
     private final HttpServer server;
     private final FilterEvaluator eval = new FilterEvaluator("", FilterEvaluator.CaseExactness.DEFAULT);
@@ -70,8 +71,10 @@ final class FakeOkta {
         if (path.equals("/oauth2/v1/token") && method.equals("POST")) {
             Map<String, String> form = parseForm(body);
             lastAssertion = form.get("client_assertion");
-            if (!"client_credentials".equals(form.get("grant_type"))
-                    || lastAssertion == null || lastAssertion.split("\\.").length != 3) {
+            lastClientSecret = form.get("client_secret");
+            boolean jwtOk = lastAssertion != null && lastAssertion.split("\\.").length == 3;
+            boolean secretOk = lastClientSecret != null && form.get("client_id") != null;
+            if (!"client_credentials".equals(form.get("grant_type")) || (!jwtOk && !secretOk)) {
                 error(ex, 400, "invalid token request");
                 return;
             }
