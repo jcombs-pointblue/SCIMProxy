@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 PointBlue Technology LLC
 package com.pointblue.scim.schema;
 
 import com.pointblue.scim.model.AttributePath;

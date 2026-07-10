@@ -9,6 +9,19 @@
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>SCIM 2.0 Proxy Server</name>
+  <inceptionYear>2026</inceptionYear>
+
+  <organization>
+    <name>PointBlue Technology LLC</name>
+  </organization>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
 
   <modules>
     <module>scim-core</module>

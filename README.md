@@ -217,6 +217,11 @@ via `ServiceLoader`; select one with `backend.type` in the config. Built-in type
 
 ## Testing
 
-`mvn test` runs 82 unit/integration tests (in-memory backends, FakeOkta, an
-in-memory LDAP server). For live end-to-end validation against a real Okta org or
-LDAP directory — including the setup gotchas above — see **[TESTING.md](TESTING.md)**.
+`mvn test` runs 106 unit/integration tests (in-memory backends, FakeOkta, in-memory
+LDAP and SQL, temp files). For live end-to-end validation against a real Okta org,
+LDAP directory, or database — including the setup gotchas above — see
+**[TESTING.md](TESTING.md)**.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Copyright (c) 2026 PointBlue Technology LLC.

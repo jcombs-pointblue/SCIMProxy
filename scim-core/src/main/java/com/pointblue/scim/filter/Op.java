@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 PointBlue Technology LLC
 package com.pointblue.scim.filter;
 
 /** RFC 7644 comparison operators. */
