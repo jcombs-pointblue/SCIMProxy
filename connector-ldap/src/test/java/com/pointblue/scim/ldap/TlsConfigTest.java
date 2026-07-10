@@ -26,9 +26,22 @@ class TlsConfigTest {
         Hashtable<String, Object> env = LdapConnections.buildEnv(
                 config("ldaps://dir.example.com:636", true));
         assertEquals(TrustAllSocketFactory.class.getName(), env.get("java.naming.ldap.factory.socket"));
-        assertEquals("true", env.get("com.sun.jndi.ldap.object.disableEndpointIdentification"));
         assertEquals("false", env.get("com.sun.jndi.ldap.connect.pool"),
                 "custom socket factory must disable the JNDI pool");
+    }
+
+    @Test
+    void insecureLdapsDisablesEndpointIdentificationSystemProperty() {
+        String key = "com.sun.jndi.ldap.object.disableEndpointIdentification";
+        String prior = System.getProperty(key);
+        System.clearProperty(key);
+        try {
+            new LdapConnections(config("ldaps://dir.example.com:636", true));
+            assertEquals("true", System.getProperty(key),
+                    "insecure LDAPS must disable hostname/IP identification (the only mechanism JNDI honors)");
+        } finally {
+            if (prior == null) System.clearProperty(key); else System.setProperty(key, prior);
+        }
     }
 
     @Test
@@ -51,6 +64,7 @@ class TlsConfigTest {
         assertNotNull(TrustAllSocketFactory.getDefault());
         assertTrue(new TrustAllSocketFactory().getDefaultCipherSuites().length > 0);
     }
+
 
     @Test
     void timeoutsDefaultAndOverride() {

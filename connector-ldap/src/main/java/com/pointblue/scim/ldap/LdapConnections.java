@@ -20,6 +20,12 @@ final class LdapConnections {
     private final Hashtable<String, Object> env;
 
     LdapConnections(LdapConfig config) {
+        if (config.ldaps && config.insecureSkipTlsVerify) {
+            // JVM-wide, and the only mechanism JNDI honors to skip LDAPS hostname/IP
+            // verification (env-map keys and socket-factory tweaks are ignored). Scoped
+            // to explicit insecure opt-in; affects LDAP endpoint identification only.
+            System.setProperty("com.sun.jndi.ldap.object.disableEndpointIdentification", "true");
+        }
         this.env = buildEnv(config);
     }
 
@@ -30,6 +36,7 @@ final class LdapConnections {
         env.put(Context.SECURITY_AUTHENTICATION, "simple");
         env.put(Context.SECURITY_PRINCIPAL, config.bindDn);
         env.put(Context.SECURITY_CREDENTIALS, config.bindPassword);
+        env.put(Context.REFERRAL, config.referrals);
         env.put("com.sun.jndi.ldap.connect.timeout", String.valueOf(config.connectTimeoutMs));
         env.put("com.sun.jndi.ldap.read.timeout", String.valueOf(config.readTimeoutMs));
         env.put("com.sun.jndi.ldap.connect.pool", "true");
@@ -38,9 +45,11 @@ final class LdapConnections {
         if (config.guidBinary) binary += " " + config.guidAttr;
         env.put("java.naming.ldap.attributes.binary", binary);
         if (config.ldaps && config.insecureSkipTlsVerify) {
+            // the factory trusts any chain AND disables hostname/IP identification
+            // (that second part is done in the factory, not via the ineffective
+            //  com.sun.jndi.ldap.object.disableEndpointIdentification env key,
+            //  which is a JVM system property and has no effect in this map)
             env.put("java.naming.ldap.factory.socket", TrustAllSocketFactory.class.getName());
-            // trust-all implies accepting a mismatched hostname too
-            env.put("com.sun.jndi.ldap.object.disableEndpointIdentification", "true");
             // the custom socket factory is incompatible with JNDI's pool
             env.put("com.sun.jndi.ldap.connect.pool", "false");
         }

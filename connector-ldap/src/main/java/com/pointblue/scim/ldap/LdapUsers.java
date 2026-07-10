@@ -152,8 +152,11 @@ final class LdapUsers implements ResourceBackend {
         values.forEach((k, v) -> { if (v != null) attrs.put(k, v); });
 
         boolean active = resource.optBoolean("active", true);
+        boolean uacStrategy = config.activeStrategy == LdapConfig.Active.USER_ACCOUNT_CONTROL;
         switch (config.activeStrategy) {
-            case USER_ACCOUNT_CONTROL -> attrs.put("userAccountControl", active ? "512" : "514");
+            // AD refuses to create an enabled account with no password in the add itself,
+            // so always add disabled (514) and enable afterwards once a password is set.
+            case USER_ACCOUNT_CONTROL -> attrs.put("userAccountControl", "514");
             case LOGIN_DISABLED -> attrs.put("loginDisabled", active ? "FALSE" : "TRUE");
             case NONE -> { }
         }
@@ -162,6 +165,16 @@ final class LdapUsers implements ResourceBackend {
         store.create(dn, attrs);
         if (password != null && config.passwordAttr == null) {
             store.modify(dn, List.of(passwordMod(password)));
+        }
+        if (uacStrategy && active) {
+            // enable only once a password exists; AD would otherwise reject the enable
+            if (password != null) {
+                store.modify(dn, List.of(new ModificationItem(DirContext.REPLACE_ATTRIBUTE,
+                        new BasicAttribute("userAccountControl", "512"))));
+            } else {
+                log.warning("AD user " + dn + " created disabled: cannot enable an account "
+                        + "without a password. Provide 'password' on create to enable.");
+            }
         }
         return toScim(store.lookup(dn, returnAttrs));
     }

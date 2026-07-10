@@ -26,7 +26,7 @@ class LdapConnectorTest {
     private static InMemoryDirectoryServer ds;
     private static SchemaRegistry registry;
 
-    private static ResourceBackend edirUsers, edirGroups, adUsers, adGroups, olUsers;
+    private static ResourceBackend edirUsers, edirGroups, adUsers, adGroups, olUsers, adPwUsers;
 
     @BeforeAll
     static void start() throws Exception {
@@ -55,6 +55,12 @@ class LdapConnectorTest {
                  "groups":{"baseDn":"ou=ad-groups,o=test"}}""");
         adUsers = ad.resource("User");
         adGroups = ad.resource("Group");
+        // AD flavor but with a plain password attribute, so the add-disabled -> set-password
+        // -> enable ordering can be exercised without an LDAPS listener (unicodePwd needs TLS)
+        LdapBackend adPw = backend("""
+                {"flavor":"ad","passwordAttr":"userPassword",
+                 "users":{"baseDn":"ou=ad-users,o=test","filter":"(objectClass=user)"}}""");
+        adPwUsers = adPw.resource("User");
         LdapBackend ol = backend("""
                 {"flavor":"openldap",
                  "users":{"baseDn":"ou=ol-users,o=test"}}""");
@@ -201,15 +207,30 @@ class LdapConnectorTest {
         String id = created.optString("id", null);
         String dn = "cn=ad.jane,ou=ad-users,o=test";
         assertEquals("ad.jane", attr(dn, "sAMAccountName"));
-        assertEquals("512", attr(dn, "userAccountControl"));
+        // no password on create -> AD leaves the account disabled (can't enable without one)
+        assertEquals("514", attr(dn, "userAccountControl"));
+        assertFalse(created.optBoolean("active", true));
 
+        // enabling requires a password to already exist; toggling disable is always allowed
         adUsers.patch(id, ops("[{\"op\":\"replace\",\"path\":\"active\",\"value\":false}]"));
         assertEquals("514", attr(dn, "userAccountControl"), "disable bit set, other bits preserved");
-        assertFalse(adUsers.get(id).optBoolean("active", true));
 
         SearchResult r = adUsers.search(new SearchRequest(
                 FilterParser.parse("userName sw \"ad.ja\""), 1, 10));
         assertEquals(1, r.totalResults());
+    }
+
+    @Test
+    void adCreateAddsDisabledThenEnablesWhenPasswordPresent() throws Exception {
+        // the in-memory server accepts unicodePwd over plain ldap (no AD TLS rule),
+        // so this exercises the add-disabled -> set-password -> enable sequence
+        JsonObject created = adPwUsers.create(Json.parseObject("""
+                {"userName":"ad.withpw","name":{"givenName":"Has","familyName":"Pw"},
+                 "active":true,"password":"P@ssw0rd-1!"}"""));
+        String dn = "cn=ad.withpw,ou=ad-users,o=test";
+        assertEquals("512", attr(dn, "userAccountControl"), "enabled after password set");
+        assertNotNull(attr(dn, "userPassword"));
+        assertTrue(created.optBoolean("active", false));
     }
 
     @Test

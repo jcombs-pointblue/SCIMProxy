@@ -63,6 +63,7 @@ public final class LdapConfig {
     public final int pageSize;
     public final int connectTimeoutMs;
     public final int readTimeoutMs;
+    public final String referrals;   // ignore | follow | throw
 
     public LdapConfig(JsonObject cfg) {
         this.url = require(cfg, "url");
@@ -136,6 +137,12 @@ public final class LdapConfig {
         this.connectTimeoutMs = intOpt(cfg, "connectTimeoutMs", 5000);
         // read timeout bounds any single LDAP operation; raise it for slow/broad subtree searches
         this.readTimeoutMs = intOpt(cfg, "readTimeoutMs", 30000);
+        // "ignore" is the safe default: AD returns continuation references when a search
+        // spans naming contexts (e.g. from the domain root), and JNDI otherwise throws
+        this.referrals = switch (cfg.optString("referrals", "ignore")) {
+            case "ignore", "follow", "throw" -> cfg.optString("referrals", "ignore");
+            default -> throw new IllegalArgumentException("referrals must be ignore | follow | throw");
+        };
     }
 
     // ---- flavor presets ----

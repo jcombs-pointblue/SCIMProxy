@@ -133,8 +133,19 @@ RDN-source attribute changes, and the SCIM id (directory GUID) survives them;
 `deleteBehavior: "disable"` deactivates instead of deleting entries.
 
 **TLS:** use an `ldaps://` URL. For lab directories with self-signed certificates,
-`"insecureSkipTlsVerify": true` installs a trust-all socket factory and disables
-hostname verification — never use it in production.
+`"insecureSkipTlsVerify": true` trusts any certificate chain **and** disables
+hostname/IP verification (needed when connecting to a DC by IP whose cert lists only
+its DNS name, typical for AD) — never use it in production.
+
+**Referrals:** `referrals` (default `ignore`) controls how continuation references
+are handled. Active Directory returns them when a search spans naming contexts (e.g.
+from the domain root); the default ignores them so the search completes with the
+in-scope results. Use `follow` to chase them, `throw` to surface them.
+
+**Active Directory specifics:** creating a user runs add-disabled → set password
+(`unicodePwd`, requires `ldaps://`) → enable, because AD refuses to create an enabled
+account without a password. A user created without a `password` stays disabled until
+one is set. Password changes require an `ldaps://` connection.
 
 **Timeouts and paging:** `connectTimeoutMs` (default 5000), `readTimeoutMs`
 (default 30000), and `pageSize` (default 500) are configurable per backend. Raise

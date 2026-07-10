@@ -40,6 +40,12 @@ public final class TrustAllSocketFactory extends SSLSocketFactory {
         return new TrustAllSocketFactory();
     }
 
+    // Note: this factory only bypasses certificate-chain validation. Hostname/IP
+    // endpoint identification is a separate check that JNDI's LDAP provider forces
+    // on after obtaining the socket, so it cannot be turned off here — it is
+    // disabled via the com.sun.jndi.ldap.object.disableEndpointIdentification
+    // system property, set by LdapConnections in insecure mode.
+
     @Override public String[] getDefaultCipherSuites() { return delegate.getDefaultCipherSuites(); }
     @Override public String[] getSupportedCipherSuites() { return delegate.getSupportedCipherSuites(); }
 

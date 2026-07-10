@@ -93,9 +93,16 @@ final class LdapStore {
                         new PagedResultsControl(config.pageSize, cookie, Control.CRITICAL)});
                 NamingEnumeration<javax.naming.directory.SearchResult> results =
                         ctx.search(baseDn, filter, sc);
-                while (results.hasMore()) {
-                    javax.naming.directory.SearchResult r = results.next();
-                    collected.add(toEntry(r.getNameInNamespace(), r.getAttributes()));
+                try {
+                    while (results.hasMore()) {
+                        javax.naming.directory.SearchResult r = results.next();
+                        collected.add(toEntry(r.getNameInNamespace(), r.getAttributes()));
+                    }
+                } catch (javax.naming.PartialResultException pre) {
+                    // With referral=ignore, AD ends a subtree search that spans naming
+                    // contexts (e.g. from the domain root) by signalling unprocessed
+                    // continuation references. All in-scope entries have been read; the
+                    // references point to partitions we deliberately do not chase.
                 }
                 cookie = null;
                 Control[] resp = ctx.getResponseControls();
