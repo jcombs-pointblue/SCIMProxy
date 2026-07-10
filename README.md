@@ -166,6 +166,27 @@ at the narrowest container that holds the entries you need — an unfiltered bro
 a huge root scope is slow regardless of timeout, though filtered searches still push
 down and stay fast.
 
+### JDBC / SQL backend
+
+Set `backend.type` to `"jdbc"` (see `backendJdbcExample` in the sample config) to map
+SCIM Users and Groups onto database tables — for apps that keep identities in SQL with
+no SCIM of their own. Describe the tables and a SCIM-path → column mapping; the
+connector discovers column types from the catalog and needs no other schema knowledge.
+
+- `users.columns` maps SCIM paths to columns; a multi-valued attribute is addressed by
+  a value-filter path (`emails[type eq "work"].value`). The `idColumn` is the SCIM id;
+  auto-generated keys (serial/identity/`uuid DEFAULT …`) are read back on insert.
+- `groups` needs a `displayNameColumn` and a `membership` join table
+  (`groupColumn`/`userColumn`); members are resolved through it and included in list
+  responses.
+- Filters push down to parameterized SQL (never string-interpolated, so filter input
+  can't inject); string `eq`/`co`/`sw`/`ew` are case-insensitive per SCIM. An unmapped
+  attribute falls back to the core's bounded in-memory scan. PATCH is emulated by the
+  core (get-apply-replace → `UPDATE`); PUT clears mapped columns absent from the payload.
+
+The PostgreSQL driver is bundled; other databases work by adding their JDBC driver to
+the classpath. Pagination uses `LIMIT`/`OFFSET` (Postgres/MySQL/H2/SQLite/MariaDB).
+
 ## Modules
 
 | Module | Contents |
@@ -173,10 +194,12 @@ down and stay fast.
 | `scim-core` | JSON, resource model, schema registry/validator, filter parser+evaluator, PATCH engine, backend SPI |
 | `connector-okta` | Okta Management API backend (OAuth2 private-key JWT) |
 | `connector-ldap` | LDAP backend: eDirectory / Active Directory / OpenLDAP flavors, LDAPS |
+| `connector-jdbc` | JDBC/SQL backend: config-driven table/column mapping, filter pushdown (PostgreSQL bundled) |
 | `scim-server` | JDK HttpServer front end, bearer auth, endpoints, in-memory backend, runnable shaded jar |
 
 Backends implement `com.pointblue.scim.spi.ScimBackendProvider` and are discovered
-via `ServiceLoader`; select one with `backend.type` in the config.
+via `ServiceLoader`; select one with `backend.type` in the config. Built-in types:
+`memory`, `okta`, `ldap`, `jdbc`.
 
 ## Testing
 

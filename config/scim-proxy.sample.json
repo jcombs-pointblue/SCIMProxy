@@ -60,6 +60,34 @@
     "readTimeoutMs": 30000,
     "referrals": "ignore"
   },
+  "backendJdbcExample": {
+    "type": "jdbc",
+    "url": "jdbc:postgresql://db.example.com:5432/appdb",
+    "user": "scim_proxy",
+    "password": "${DB_PW}",
+    "users": {
+      "table": "users",
+      "idColumn": "id",
+      "createdColumn": "created_at",
+      "modifiedColumn": "updated_at",
+      "columns": {
+        "userName": "username",
+        "name.givenName": "given_name",
+        "name.familyName": "family_name",
+        "emails[type eq \"work\"].value": "email",
+        "title": "title",
+        "active": "active"
+      }
+    },
+    "groups": {
+      "table": "groups",
+      "idColumn": "id",
+      "displayNameColumn": "display_name",
+      "createdColumn": "created_at",
+      "modifiedColumn": "updated_at",
+      "membership": { "table": "group_members", "groupColumn": "group_id", "userColumn": "user_id" }
+    }
+  },
   "limits": {
     "maxPayloadBytes": 1048576,
     "defaultPageSize": 100
