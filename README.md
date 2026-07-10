@@ -1,5 +1,8 @@
 # SCIM 2.0 Proxy Server
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Java 21+](https://img.shields.io/badge/Java-21%2B-blue.svg)
+
 A standalone SCIM 2.0 server (RFC 7643/7644) that fronts platforms without their own
 SCIM interface, via pluggable backend connectors. Zero runtime dependencies — JDK 21+
 only. See [DESIGN.md](DESIGN.md) for the full design.
