@@ -10,6 +10,11 @@ import com.pointblue.scim.json.JsonObject;
 import com.pointblue.scim.schema.CoreSchemas;
 import com.pointblue.scim.schema.ResourceType;
 import com.pointblue.scim.schema.SchemaRegistry;
+import com.pointblue.scim.server.auth.AuthChain;
+import com.pointblue.scim.server.auth.Authenticator;
+import com.pointblue.scim.server.auth.BasicAuthenticator;
+import com.pointblue.scim.server.auth.JwtAuthenticator;
+import com.pointblue.scim.server.auth.StaticBearerAuthenticator;
 import com.pointblue.scim.server.config.ServerConfig;
 import com.pointblue.scim.server.endpoints.DiscoveryEndpoints;
 import com.pointblue.scim.server.endpoints.ResourceEndpoint;
@@ -25,11 +30,11 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
@@ -49,8 +54,7 @@ public final class ScimHttpServer {
     private final SchemaRegistry registry;
     private final ScimBackend backend;
     private final Map<String, ResourceEndpoint> endpointsByPath = new LinkedHashMap<>(); // "users" -> endpoint
-    private final Map<String, byte[]> tokenDigests = new HashMap<>();
-    private final Map<String, String> tokenNames;
+    private final AuthChain auth;
 
     private DiscoveryEndpoints discovery;
     private HttpServer httpServer;
@@ -60,13 +64,31 @@ public final class ScimHttpServer {
         this.config = config;
         this.registry = registry;
         this.backend = backend;
-        this.tokenNames = config.bearerTokens();
-        if (tokenNames.isEmpty()) {
-            throw new IllegalArgumentException("no auth.bearerTokens configured; refusing to start unauthenticated");
+        this.auth = buildAuthChain(config);
+    }
+
+    private static AuthChain buildAuthChain(ServerConfig config) {
+        List<Authenticator> methods = new ArrayList<>();
+        if (!config.bearerTokens().isEmpty()) {
+            methods.add(new StaticBearerAuthenticator(config.bearerTokens()));
         }
-        for (String token : tokenNames.keySet()) {
-            tokenDigests.put(token, sha256(token));
+        if (config.oauth() != null) {
+            JsonObject o = config.oauth();
+            List<String> scopes = new ArrayList<>();
+            if (o.getIgnoreCase("requiredScopes") instanceof JsonArray arr) {
+                for (var v : arr) scopes.add(v.asString());
+            }
+            methods.add(new JwtAuthenticator(HttpClient.newHttpClient(),
+                    new JwtAuthenticator.Config(o.optString("jwksUrl", null),
+                            o.optString("issuer", null), o.optString("audience", null),
+                            scopes, o.optString("principalClaim", "sub"),
+                            o.getIgnoreCase("clockSkewSeconds") == null ? 60
+                                    : o.getIgnoreCase("clockSkewSeconds").asNumber().longValue())));
         }
+        if (!config.basicUsers().isEmpty()) {
+            methods.add(new BasicAuthenticator(config.basicUsers()));
+        }
+        return new AuthChain(methods); // throws if nothing is configured
     }
 
     public String baseUrl() { return baseUrl; }
@@ -78,8 +100,15 @@ public final class ScimHttpServer {
         int port = httpServer.getAddress().getPort(); // bound at create()
         // endpoints need the externally visible base URL, which may derive from the bound port
         baseUrl = config.baseUrl(port);
+        List<DiscoveryEndpoints.AuthScheme> schemes = new ArrayList<>();
+        java.util.Set<String> seenSchemes = new java.util.LinkedHashSet<>();
+        for (Authenticator a : auth.authenticators()) {
+            if (seenSchemes.add(a.schemeType() + "|" + a.schemeName())) {
+                schemes.add(new DiscoveryEndpoints.AuthScheme(a.schemeType(), a.schemeName()));
+            }
+        }
         discovery = new DiscoveryEndpoints(registry, backend.capabilities(),
-                baseUrl, backend.capabilities().maxInMemoryScan());
+                baseUrl, backend.capabilities().maxInMemoryScan(), schemes);
         for (ResourceType rt : registry.allResourceTypes()) {
             ResourceBackend rb = backend.resource(rt.name());
             if (rb == null) continue;
@@ -109,9 +138,9 @@ public final class ScimHttpServer {
                 backend.healthCheck();
                 status = sendRaw(ex, 200, "{\"status\":\"ok\"}", "application/json");
             } else {
-                principal = authenticate(ex);
+                principal = auth.authenticate(ex.getRequestHeaders().getFirst("Authorization"));
                 if (principal == null) {
-                    ex.getResponseHeaders().set("WWW-Authenticate", "Bearer realm=\"scim\"");
+                    ex.getResponseHeaders().set("WWW-Authenticate", auth.challengeHeader());
                     status = sendError(ex, new ScimException(401, null, "authentication required"));
                 } else {
                     status = route(ex, method, path);
@@ -207,30 +236,6 @@ public final class ScimHttpServer {
 
     private static ScimException methodNotAllowed(String method) {
         return new ScimException(405, null, "method " + method + " not allowed here");
-    }
-
-    // ---- auth ----
-
-    /** Returns the client name, or null when unauthenticated. Constant-time comparison. */
-    private String authenticate(HttpExchange ex) {
-        String header = ex.getRequestHeaders().getFirst("Authorization");
-        if (header == null || !header.regionMatches(true, 0, "Bearer ", 0, 7)) return null;
-        byte[] presented = sha256(header.substring(7).trim());
-        String match = null;
-        for (Map.Entry<String, byte[]> e : tokenDigests.entrySet()) {
-            if (MessageDigest.isEqual(presented, e.getValue())) {
-                match = tokenNames.get(e.getKey());
-            }
-        }
-        return match;
-    }
-
-    private static byte[] sha256(String s) {
-        try {
-            return MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
     }
 
     // ---- I/O ----

@@ -459,8 +459,17 @@ schema registry and (for Okta) the live org schema, token exchange succeeds,
 ## 11. Security
 
 - TLS required (HTTP only behind an explicit `--insecure-dev` flag).
-- Bearer tokens compared constant-time; per-token names appear in access logs, token
-  values never logged. 401 with `WWW-Authenticate: Bearer` on failure.
+- Inbound auth is a chain of pluggable `Authenticator`s (each request is tried against
+  every enabled method; first match wins), advertised in `/ServiceProviderConfig`:
+  - **Static bearer tokens** — the default; compared constant-time as SHA-256 digests,
+    values never logged.
+  - **OAuth 2.0 bearer-JWT** (resource-server mode) — generic JWKS-based validation of
+    RS256/384/512 signatures plus issuer / audience / expiry / required-scope checks;
+    JWKS cached and refreshed on key rotation. Lets clients present tokens from their
+    own IdP.
+  - **HTTP Basic** — for legacy clients; password matched constant-time.
+  - At least one method must be configured or the server refuses to start. 401 with a
+    combined `WWW-Authenticate` challenge (one per scheme keyword) on failure.
 - Request bodies capped (`maxPayloadBytes`); JSON parser enforces depth/size limits.
 - Secrets only via env-var substitution; config files can be world-readable.
 - Access log: method, path (query stripped of filter values at INFO), principal,

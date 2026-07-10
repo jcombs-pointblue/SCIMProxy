@@ -17,7 +17,7 @@ only. See [DESIGN.md](DESIGN.md) for the full design.
   table mapping, PostgreSQL bundled), `file` (CSV / JSON). Each rides the same SPI
   and inherits the full protocol layer.
 - **Validated live:** Okta (Preview org), eDirectory 9.3, Active Directory, 389
-  Directory Server, PostgreSQL 17 — see [TESTING.md](TESTING.md). 106 tests total.
+  Directory Server, PostgreSQL 17 — see [TESTING.md](TESTING.md). 113 tests total.
 - **Next:** `/Bulk`, ETags, native TLS listener; generic REST connector and more LDAP
   flavor presets as targets arise.
 
@@ -45,6 +45,38 @@ curl -s "http://localhost:8080/scim/v2/Users?filter=userName%20eq%20%22jdoe%22" 
 
 Copy `config/scim-proxy.sample.json` to `config/scim-proxy.json`. Secrets are
 referenced as `${ENV_VAR}` and resolved from the environment at startup.
+
+### Inbound authentication
+
+How SCIM clients authenticate **to** the proxy. Configure any combination under
+`auth`; each request is tried against every enabled method and the first match wins,
+so different clients can use different schemes. At least one method must be configured
+— the server refuses to start unauthenticated. Enabled methods are advertised in
+`/ServiceProviderConfig`.
+
+- **`bearerTokens`** — long-lived static tokens, one per client. The default; works
+  with every SCIM client. Compared constant-time; values are never logged.
+- **`oauth`** — OAuth 2.0 bearer-JWT validation (resource-server mode). Validates a
+  JWT issued by any standards-compliant IdP: `jwksUrl` (required), plus optional
+  `issuer`, `audience`, and `requiredScopes`. Checks the RS256/384/512 signature
+  against the IdP's JWKS, then expiry/not-before, issuer, audience, and scopes. Keys
+  are cached and refreshed on rotation. This is the production-grade option — the same
+  Okta org used as a backend can also issue inbound tokens.
+- **`basic`** — HTTP Basic auth for legacy clients that only support username/password.
+  Passwords matched constant-time.
+
+```jsonc
+"auth": {
+  "bearerTokens": [ { "name": "idm-driver", "token": "${SCIM_TOKEN_IDM}" } ],
+  "oauth": {
+    "jwksUrl": "https://idp.example.com/oauth2/v1/keys",
+    "issuer": "https://idp.example.com",
+    "audience": "scim-proxy",
+    "requiredScopes": ["scim:write"]
+  },
+  "basic": [ { "name": "legacy", "username": "svc-scim", "password": "${SCIM_BASIC_PW}" } ]
+}
+```
 
 ### Schema extensions
 

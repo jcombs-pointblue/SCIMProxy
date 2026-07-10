@@ -10,19 +10,27 @@ import com.pointblue.scim.schema.Schema;
 import com.pointblue.scim.schema.SchemaRegistry;
 import com.pointblue.scim.spi.Capabilities;
 
+import java.util.List;
+
 /** /ServiceProviderConfig, /Schemas, /ResourceTypes — generated, always truthful. */
 public final class DiscoveryEndpoints {
+
+    /** One enabled authentication scheme for ServiceProviderConfig (RFC 7643 §5). */
+    public record AuthScheme(String type, String name) {}
 
     private final SchemaRegistry registry;
     private final Capabilities caps;
     private final String baseUrl;
     private final int maxResults;
+    private final List<AuthScheme> authSchemes;
 
-    public DiscoveryEndpoints(SchemaRegistry registry, Capabilities caps, String baseUrl, int maxResults) {
+    public DiscoveryEndpoints(SchemaRegistry registry, Capabilities caps, String baseUrl, int maxResults,
+                              List<AuthScheme> authSchemes) {
         this.registry = registry;
         this.caps = caps;
         this.baseUrl = baseUrl;
         this.maxResults = maxResults;
+        this.authSchemes = authSchemes;
     }
 
     public JsonObject serviceProviderConfig() {
@@ -42,13 +50,15 @@ public final class DiscoveryEndpoints {
         o.put("changePassword", supported(false));
         o.put("sort", supported(false));
         o.put("etag", supported(caps.etagSupported()));
-        JsonArray authSchemes = new JsonArray();
-        JsonObject bearer = new JsonObject();
-        bearer.put("type", "oauthbearertoken");
-        bearer.put("name", "Bearer Token");
-        bearer.put("description", "Authorization header with a bearer token issued out of band");
-        authSchemes.add(bearer);
-        o.put("authenticationSchemes", authSchemes);
+        JsonArray schemesJson = new JsonArray();
+        for (AuthScheme s : this.authSchemes) {
+            JsonObject scheme = new JsonObject();
+            scheme.put("type", s.type());
+            scheme.put("name", s.name());
+            scheme.put("description", "Authorization header (" + s.name() + ")");
+            schemesJson.add(scheme);
+        }
+        o.put("authenticationSchemes", schemesJson);
         JsonObject meta = new JsonObject();
         meta.put("resourceType", "ServiceProviderConfig");
         meta.put("location", baseUrl + "/ServiceProviderConfig");

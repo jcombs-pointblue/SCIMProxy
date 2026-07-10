@@ -125,6 +125,36 @@ public final class ServerConfig {
 
     public Map<String, String> bearerTokens() { return tokensByValue; }
 
+    /** username -> [clientName, password] for HTTP Basic auth. Empty if not configured. */
+    public Map<String, String[]> basicUsers() {
+        Map<String, String[]> users = new LinkedHashMap<>();
+        if (root.getIgnoreCase("auth") instanceof JsonObject auth
+                && auth.getIgnoreCase("basic") instanceof JsonArray arr) {
+            for (JsonValue v : arr) {
+                JsonObject u = v.asObject();
+                String username = u.optString("username", null);
+                String password = u.optString("password", null);
+                if (username == null || password == null) {
+                    throw new IllegalArgumentException("auth.basic entry needs 'username' and 'password'");
+                }
+                users.put(username, new String[] {u.optString("name", username), password});
+            }
+        }
+        return users;
+    }
+
+    /** OAuth JWT-validation config, or null if auth.oauth is not configured. */
+    public JsonObject oauth() {
+        if (root.getIgnoreCase("auth") instanceof JsonObject auth
+                && auth.getIgnoreCase("oauth") instanceof JsonObject o) {
+            if (o.optString("jwksUrl", null) == null) {
+                throw new IllegalArgumentException("auth.oauth requires 'jwksUrl'");
+            }
+            return o;
+        }
+        return null;
+    }
+
     public JsonObject backend() {
         JsonValue v = root.getIgnoreCase("backend");
         if (!(v instanceof JsonObject o) || o.optString("type", null) == null) {

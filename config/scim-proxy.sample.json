@@ -7,7 +7,16 @@
   "auth": {
     "bearerTokens": [
       { "name": "idm-driver", "token": "${SCIM_TOKEN_IDM}" }
-    ]
+    ],
+    "basicExample": [
+      { "name": "legacy-client", "username": "svc-scim", "password": "${SCIM_BASIC_PW}" }
+    ],
+    "oauthExample": {
+      "jwksUrl": "https://idp.example.com/oauth2/v1/keys",
+      "issuer": "https://idp.example.com",
+      "audience": "scim-proxy",
+      "requiredScopes": ["scim:write"]
+    }
   },
   "schemas": { "dir": "config/schemas" },
   "resourceTypes": {
