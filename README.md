@@ -122,6 +122,11 @@ Membership is modeled as **member pairs**: each pair names the group-side attrib
 maintain (gets the group DN). That is the whole difference between the directory
 types, so a new directory is usually just a different `memberPairs` list.
 
+The eDirectory group filter excludes iManager Role-Based Services scope objects
+(`rbsScope` / `rbsScope2`), which are stored as `groupOfNames` and would otherwise
+appear as bogus groups. Override `groups.filter` if your tree needs different
+exclusions.
+
 Other behaviors: SCIM filters translate to RFC 4515 LDAP filters (value-path
 filters fall back to in-memory evaluation); renames happen via modify-DN when the
 RDN-source attribute changes, and the SCIM id (directory GUID) survives them;

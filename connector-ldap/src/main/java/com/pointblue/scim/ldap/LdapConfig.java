@@ -166,10 +166,16 @@ public final class LdapConfig {
             return m;
         }
 
+        // eDirectory iManager stores Role-Based Services scope objects as groupOfNames
+        // (classes rbsScope / rbsScope2), so a bare (objectClass=groupOfNames) sweeps in
+        // that admin plumbing. Exclude both so only real groups are returned at any scope.
+        static final String EDIR_GROUP_FILTER =
+                "(&(objectClass=groupOfNames)(!(objectClass=rbsScope))(!(objectClass=rbsScope2)))";
+
         static final Defaults EDIRECTORY = new Defaults(
                 "cn", List.of("top", "person", "organizationalPerson", "inetOrgPerson"),
                 "(objectClass=inetOrgPerson)", common("cn"),
-                List.of("top", "groupOfNames"), "(objectClass=groupOfNames)",
+                List.of("top", "groupOfNames"), EDIR_GROUP_FILTER,
                 List.of(new MemberPair("member", "groupMembership"),
                         new MemberPair("equivalentToMe", "securityEquals")),
                 "GUID", true, "loginDisabled", "userPassword");

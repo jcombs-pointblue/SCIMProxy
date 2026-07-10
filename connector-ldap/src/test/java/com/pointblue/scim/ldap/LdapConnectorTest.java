@@ -135,6 +135,25 @@ class LdapConnectorTest {
     }
 
     @Test
+    void edirGroupSearchExcludesRbsScopeObjects() throws Exception {
+        // a real group created through the connector
+        edirGroups.create(Json.parseObject("{\"displayName\":\"RealGroup\"}"));
+        // iManager RBS scope objects: groupOfNames carrying rbsScope / rbsScope2, named like a tree
+        ds.add("dn: cn=o=test,ou=edir-groups,o=test",
+                "objectClass: groupOfNames", "objectClass: rbsScope",
+                "cn: o=test", "member: cn=admin,o=test");
+        ds.add("dn: cn=scope2,ou=edir-groups,o=test",
+                "objectClass: groupOfNames", "objectClass: rbsScope2",
+                "cn: scope2", "member: cn=admin,o=test");
+
+        SearchResult r = edirGroups.search(new SearchRequest(null, 1, 50));
+        var names = r.resources().stream().map(g -> g.optString("displayName", "")).toList();
+        assertTrue(names.contains("RealGroup"), "real group is returned");
+        assertFalse(names.contains("o=test"), "rbsScope object is excluded");
+        assertFalse(names.contains("scope2"), "rbsScope2 object is excluded");
+    }
+
+    @Test
     void edirGroupMembershipMaintainsBothSides() throws Exception {
         String uid = edirUsers.create(user("edir.member")).optString("id", null);
         String userDn = "cn=edir.member,ou=edir-users,o=test";
