@@ -160,6 +160,34 @@ class LdapConnectorTest {
     }
 
     @Test
+    void groupListIncludesMembersByDefault() throws Exception {
+        String uid = edirUsers.create(user("list.member")).optString("id", null);
+        edirGroups.create(Json.parseObject("""
+                {"displayName":"ListGroup","members":[{"value":"%s"}]}""".formatted(uid)));
+
+        SearchResult r = edirGroups.search(new SearchRequest(
+                FilterParser.parse("displayName eq \"ListGroup\""), 1, 10));
+        JsonObject g = r.resources().get(0);
+        assertNotNull(g.get("members"), "list response carries members (RFC 7644 default)");
+        assertEquals(uid, g.get("members").asArray().get(0).asObject().optString("value", null));
+    }
+
+    @Test
+    void membersInListFalseOmitsThem() throws Exception {
+        LdapBackend noMembers = backend("""
+                {"flavor":"edirectory","membersInList":false,
+                 "users":{"baseDn":"ou=edir-users,o=test"},
+                 "groups":{"baseDn":"ou=edir-groups,o=test"}}""");
+        String uid = edirUsers.create(user("nolist.member")).optString("id", null);
+        edirGroups.create(Json.parseObject("""
+                {"displayName":"NoListGroup","members":[{"value":"%s"}]}""".formatted(uid)));
+
+        SearchResult r = noMembers.resource("Group").search(new SearchRequest(
+                FilterParser.parse("displayName eq \"NoListGroup\""), 1, 10));
+        assertNull(r.resources().get(0).get("members"), "opt-out omits members from list");
+    }
+
+    @Test
     void edirGroupMembershipMaintainsBothSides() throws Exception {
         String uid = edirUsers.create(user("edir.member")).optString("id", null);
         String userDn = "cn=edir.member,ou=edir-users,o=test";

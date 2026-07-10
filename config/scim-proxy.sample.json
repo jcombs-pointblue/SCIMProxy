@@ -54,6 +54,7 @@
     },
     "deleteBehavior": "disable",
     "memberCap": 1000,
+    "membersInList": true,
     "pageSize": 500,
     "connectTimeoutMs": 5000,
     "readTimeoutMs": 30000,

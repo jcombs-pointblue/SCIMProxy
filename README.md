@@ -132,6 +132,12 @@ filters fall back to in-memory evaluation); renames happen via modify-DN when th
 RDN-source attribute changes, and the SCIM id (directory GUID) survives them;
 `deleteBehavior: "disable"` deactivates instead of deleting entries.
 
+Group **members are included in list responses** (`membersInList`, default true) so
+clients that render list rows without re-fetching each group still see membership.
+Resolving each member DN to its id costs one lookup per member; set `membersInList:
+false` for directories with very large groups where group-list latency matters, and
+clients then read members via `GET /Groups/{id}`.
+
 **TLS:** use an `ldaps://` URL. For lab directories with self-signed certificates,
 `"insecureSkipTlsVerify": true` trusts any certificate chain **and** disables
 hostname/IP verification (needed when connecting to a DC by IP whose cert lists only

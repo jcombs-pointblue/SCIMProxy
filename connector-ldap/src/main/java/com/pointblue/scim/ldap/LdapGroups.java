@@ -184,8 +184,7 @@ final class LdapGroups implements ResourceBackend {
         LdapStore.Page page = store.search(groupBase(), filter, returnAttrs,
                 request.startIndex(), request.count());
         List<JsonObject> resources = new ArrayList<>();
-        // members are not materialized on list responses (one lookup per member otherwise)
-        for (LdapStore.Entry e : page.entries()) resources.add(toScim(e, false));
+        for (LdapStore.Entry e : page.entries()) resources.add(toScim(e, config.membersInList));
         return new SearchResult(resources, page.total());
     }
 

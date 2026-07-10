@@ -60,6 +60,7 @@ public final class LdapConfig {
     public final String passwordAttr;            // null = unicodePwd (AD semantics)
     public final boolean deleteDisablesOnly;
     public final int memberCap;
+    public final boolean membersInList;
     public final int pageSize;
     public final int connectTimeoutMs;
     public final int readTimeoutMs;
@@ -133,6 +134,10 @@ public final class LdapConfig {
                     "deleteBehavior must be 'delete' or 'disable', got '" + behavior + "'");
         };
         this.memberCap = intOpt(cfg, "memberCap", 1000);
+        // include group members in list responses (RFC 7644 default). Resolving each
+        // member DN to its id costs one lookup; set false for very large groups where
+        // group-list latency matters (clients then read members via GET /Groups/{id}).
+        this.membersInList = cfg.optBoolean("membersInList", true);
         this.pageSize = intOpt(cfg, "pageSize", 500);
         this.connectTimeoutMs = intOpt(cfg, "connectTimeoutMs", 5000);
         // read timeout bounds any single LDAP operation; raise it for slow/broad subtree searches
