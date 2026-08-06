@@ -18,8 +18,9 @@ only. See [DESIGN.md](DESIGN.md) for the full design.
   and inherits the full protocol layer.
 - **Validated live:** Okta (Preview org), eDirectory 9.3, Active Directory, 389
   Directory Server, PostgreSQL 17 — see [TESTING.md](TESTING.md). 113 tests total.
-- **Next:** `/Bulk`, ETags, native TLS listener; generic REST connector and more LDAP
-  flavor presets as targets arise.
+- **Next:** `/Bulk`, ETags; generic REST connector and more LDAP flavor presets as
+  targets arise. TLS is terminated at a reverse proxy / ingress (see
+  [Deployment](#deployment)), not in-process.
 
 ## Build and run
 
@@ -39,6 +40,39 @@ curl -s -X POST http://localhost:8080/scim/v2/Users \
 
 curl -s "http://localhost:8080/scim/v2/Users?filter=userName%20eq%20%22jdoe%22" \
   -H "Authorization: Bearer $TOKEN"
+```
+
+## Deployment
+
+The server speaks **plain HTTP** and is designed to run **behind a TLS-terminating
+reverse proxy or ingress controller** (nginx, HAProxy, Envoy, Caddy, or a Kubernetes
+ingress). That edge layer owns HTTPS, certificates and rotation, and — if you need
+client-certificate (mTLS) authentication — the cert validation, forwarding an
+identity header to the proxy. TLS is deliberately **not** implemented in-process:
+terminating at the edge is the standard operational model, keeps this service small,
+and lets ops manage certificates with existing tooling.
+
+Checklist:
+
+- **Bind to a private interface.** Only the reverse proxy / ingress should be
+  internet-facing; run the server on localhost or a trusted network segment. If the
+  hop between the edge and the server crosses an untrusted network, secure it at the
+  infrastructure layer (e.g. mTLS or a service mesh).
+- **Set `server.baseUrl` to the external HTTPS URL** (e.g. `https://scim.example.com`)
+  so `meta.location`, `/ServiceProviderConfig`, and discovery responses advertise the
+  correct public address rather than the internal `http://host:port`.
+- **Forward the `Authorization` header** unmodified — inbound auth (bearer / OAuth
+  JWT / Basic) is validated by the server, not the proxy.
+- Keep tokens and backend secrets in environment variables (`${ENV_VAR}` substitution).
+
+Example nginx location:
+
+```nginx
+location /scim/ {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header Authorization $http_authorization;
+}
 ```
 
 ## Configuration

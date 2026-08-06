@@ -75,7 +75,7 @@ is the only coupling point between protocol and connector.
 | Concern | Choice | Rationale |
 |---|---|---|
 | Language / runtime | Java 21 (LTS) | Virtual threads make thread-per-request cheap; records/sealed types for the AST. |
-| HTTP server | `com.sun.net.httpserver.HttpServer` + `HttpsServer` | Zero deps, TLS support; adequate for provisioning traffic (low RPS, latency dominated by the backend call). |
+| HTTP server | `com.sun.net.httpserver.HttpServer` | Zero deps; adequate for provisioning traffic (low RPS, latency dominated by the backend call). Plain HTTP — TLS is terminated at a reverse proxy / ingress. |
 | HTTP client | `java.net.http.HttpClient` | Zero deps, HTTP/2, async-capable. |
 | JSON | Small internal module (`scim.json`) | SCIM payloads are plain JSON; a strict ~600-line parser/writer is well-bounded. Isolated behind a `Json` facade so Jackson can be swapped in later with a one-package change. |
 | JWT signing (Okta) | `java.security.Signature` (RS256) + Base64URL | A client-assertion JWT is just two Base64URL JSON segments and an RSA-SHA256 signature — no library needed. |
@@ -432,8 +432,9 @@ Single JSON file (`config/scim-proxy.json`), `${ENV_VAR}` substitution for secre
 
 ```jsonc
 {
-  "server": { "port": 8443, "baseUrl": "https://scim.example.com",
-              "tls": { "keystore": "config/tls.p12", "password": "${TLS_PW}" } },
+  "server": { "port": 8080, "baseUrl": "https://scim.example.com" },
+  // baseUrl is the external HTTPS address (TLS terminated at the reverse proxy);
+  // the server itself listens on plain HTTP at `port`.
   "auth":   { "bearerTokens": [ { "name": "idm-driver", "token": "${SCIM_TOKEN_IDM}" } ] },
   "schemas":   { "dir": "config/schemas" },
   "resourceTypes": {
@@ -458,7 +459,10 @@ schema registry and (for Okta) the live org schema, token exchange succeeds,
 
 ## 11. Security
 
-- TLS required (HTTP only behind an explicit `--insecure-dev` flag).
+- TLS is terminated at a reverse proxy / ingress controller, not in-process (see the
+  README *Deployment* section). The server speaks plain HTTP on a trusted network;
+  `server.baseUrl` is set to the external HTTPS URL so advertised locations are
+  correct. Client-certificate (mTLS) auth, if needed, is handled at the edge.
 - Inbound auth is a chain of pluggable `Authenticator`s (each request is tried against
   every enabled method; first match wins), advertised in `/ServiceProviderConfig`:
   - **Static bearer tokens** — the default; compared constant-time as SHA-256 digests,
@@ -530,6 +534,6 @@ The questions raised during design, and how they were settled in the build:
    changes the config shape and remains the main open question.
 
 Beyond these, the roadmap items not yet built are: `/Bulk`, ETags/`If-Match`,
-`sortBy`, a native TLS listener (and mTLS inbound auth alongside it), ES256 JWT keys,
-a generic REST connector, and additional LDAP flavor presets / non-Postgres JDBC
-dialects on demand.
+`sortBy`, ES256 JWT keys, a generic REST connector, and additional LDAP flavor
+presets / non-Postgres JDBC dialects on demand. TLS termination is intentionally
+delegated to a reverse proxy / ingress (see README *Deployment*), not built in-process.
