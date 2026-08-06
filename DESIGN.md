@@ -508,15 +508,28 @@ cache, both small and lock-guarded.
 5. **M5 — hardening:** rate-limit behavior, cursor bridge, config validation,
    packaging (shaded jar + systemd/container docs).
 
-## 15. Open questions
+## 15. Design questions — resolutions
 
-1. `externalId` storage: default plan is a custom Okta profile attribute — confirm
-   the org allows adding it, or choose an existing attribute.
-2. Should `PUT /Users/{id}` clearing an attribute null it in Okta (true replace) or
-   preserve unmapped Okta-side attributes? Proposed: true replace for *mapped*
-   attributes only; unmapped Okta profile attributes untouched.
-3. Group `members` on large groups: return members up to a cap (default 1000) with
-   full list via paged `GET /Groups/{id}?attributes=members`+cursor, or always
-   truncate? Affects IGA reconciliation.
-4. Is multi-org (multiple Okta tenants behind one proxy, path- or token-routed)
-   needed soon? It changes config shape; cheap now, annoying later.
+The questions raised during design, and how they were settled in the build:
+
+1. **`externalId` storage — RESOLVED.** `externalId` is a normal mapping entry, not a
+   hardcoded attribute: a deployment maps it to any target attribute
+   (`{"scim": "externalId", "okta": "profile.externalId"}`, or an LDAP/column field).
+   Unmapped, it is accepted but not persisted. Same mechanism across all connectors.
+2. **`PUT` replace semantics — RESOLVED.** True replace for *mapped* attributes only —
+   an attribute absent from the payload is cleared (via explicit nulls); unmapped
+   target-side attributes are left untouched. Implemented in the Okta, LDAP, and JDBC
+   connectors; the file backend rewrites the record from the payload.
+3. **Group `members` on large groups — RESOLVED (capped).** Member materialization is
+   bounded by `memberCap` (default 1000), and `membersInList` (default true) controls
+   whether list responses include members at all — so operators trade completeness
+   against latency. Full cursor-paged retrieval of members *beyond* the cap via
+   `GET /Groups/{id}?attributes=members` remains a possible enhancement, not built.
+4. **Multi-org / multi-tenant — OPEN.** Still one backend per deployment/config. Path-
+   or token-routed multi-tenancy (multiple targets behind one proxy) is unbuilt; it
+   changes the config shape and remains the main open question.
+
+Beyond these, the roadmap items not yet built are: `/Bulk`, ETags/`If-Match`,
+`sortBy`, a native TLS listener (and mTLS inbound auth alongside it), ES256 JWT keys,
+a generic REST connector, and additional LDAP flavor presets / non-Postgres JDBC
+dialects on demand.
