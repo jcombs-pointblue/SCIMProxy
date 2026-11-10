@@ -8,6 +8,7 @@ import com.pointblue.scim.json.JsonValue;
 import com.pointblue.scim.model.AttributePath;
 import com.pointblue.scim.patch.PatchEngine;
 import com.pointblue.scim.patch.PatchOp;
+import com.pointblue.scim.schema.CoreSchemas;
 import com.pointblue.scim.schema.SchemaRegistry;
 import com.pointblue.scim.spi.BackendException;
 import com.pointblue.scim.spi.ResourceBackend;
@@ -39,6 +40,7 @@ final class LdapUsers implements ResourceBackend {
     private final LdapConfig config;
     private final PatchEngine patchEngine;
     private final String[] returnAttrs;
+    private final LdapFilters.Resolver filterResolver;
 
     LdapUsers(LdapStore store, LdapMapper mapper, LdapConfig config, SchemaRegistry registry) {
         this.store = store;
@@ -52,7 +54,18 @@ final class LdapUsers implements ResourceBackend {
         attrs.add("loginDisabled");
         attrs.add("nsAccountLock");
         attrs.addAll(List.of(TIMESTAMPS));
+        attrs.add(config.createdAttr);
+        attrs.add(config.modifiedAttr);
         this.returnAttrs = attrs.toArray(new String[0]);
+        this.filterResolver = new LdapFilters.Resolver() {
+            @Override public LdapFilters.Target exact(AttributePath path) {
+                LdapFilters.Target meta = config.metaTarget(path, CoreSchemas.USER_URN);
+                return meta != null ? meta : mapper.exact(path);
+            }
+            @Override public List<Map<String, LdapFilters.Target>> elements(AttributePath path) {
+                return mapper.elements(path);
+            }
+        };
     }
 
     String[] userReturnAttrs() { return returnAttrs; }
@@ -65,17 +78,20 @@ final class LdapUsers implements ResourceBackend {
         scim.put("active", readActive(entry));
         JsonObject meta = new JsonObject();
         meta.put("resourceType", "User");
-        String created = LdapStore.toIso(coalesce(entry, "createTimestamp", "whenCreated"));
-        String modified = LdapStore.toIso(coalesce(entry, "modifyTimestamp", "whenChanged"));
+        String created = LdapStore.toIso(coalesce(entry, config.createdAttr, "createTimestamp", "whenCreated"));
+        String modified = LdapStore.toIso(coalesce(entry, config.modifiedAttr, "modifyTimestamp", "whenChanged"));
         if (created != null) meta.put("created", created);
         if (modified != null) meta.put("lastModified", modified);
         scim.put("meta", meta);
         return scim;
     }
 
-    private static String coalesce(LdapStore.Entry e, String a, String b) {
-        String v = e.first(a);
-        return v != null ? v : e.first(b);
+    static String coalesce(LdapStore.Entry e, String... attrs) {
+        for (String a : attrs) {
+            String v = e.first(a);
+            if (v != null) return v;
+        }
+        return null;
     }
 
     boolean readActive(LdapStore.Entry entry) {
@@ -253,7 +269,7 @@ final class LdapUsers implements ResourceBackend {
     public SearchResult search(SearchRequest request) {
         String filter = config.userFilter;
         if (request.filter() != null) {
-            filter = "(&" + filter + LdapFilters.toLdap(request.filter(), mapper::ldapAttrFor) + ")";
+            filter = "(&" + filter + LdapFilters.toLdap(request.filter(), filterResolver) + ")";
         }
         LdapStore.Page page = store.search(config.userBaseDn, filter, returnAttrs,
                 request.startIndex(), request.count());

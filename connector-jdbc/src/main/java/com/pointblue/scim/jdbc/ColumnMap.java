@@ -45,6 +45,35 @@ final class ColumnMap {
         return e == null ? null : e.column();
     }
 
+    /**
+     * Columns a filter path reads. Beyond exact mappings, a multi-valued attribute
+     * mapped per element resolves the way clients filter it: emails.value (and bare
+     * emails, which compares each element's value) reads every column mapped as
+     * emails[...].value. Empty when unmapped.
+     */
+    List<String> filterColumns(AttributePath path) {
+        String exact = column(path);
+        if (exact != null) return List.of(exact);
+        if (path.valueFilter() != null) return List.of();
+        String sub = path.subAttr() == null ? "value" : path.subAttr();
+        List<String> cols = new java.util.ArrayList<>();
+        for (Entry e : byKey.values()) {
+            AttributePath p = e.path();
+            if (p.valueFilter() != null && p.subAttr() != null && p.subAttr().equalsIgnoreCase(sub)
+                    && p.attr().equalsIgnoreCase(path.attr()) && sameSchema(p, path)
+                    && !cols.contains(e.column())) {
+                cols.add(e.column());
+            }
+        }
+        return cols;
+    }
+
+    private boolean sameSchema(AttributePath a, AttributePath b) {
+        String ua = a.schemaUrn() == null ? baseUrn : a.schemaUrn();
+        String ub = b.schemaUrn() == null ? baseUrn : b.schemaUrn();
+        return ua.equalsIgnoreCase(ub);
+    }
+
     int sqlType(String column) {
         return columnTypes.getOrDefault(column.toLowerCase(), java.sql.Types.VARCHAR);
     }

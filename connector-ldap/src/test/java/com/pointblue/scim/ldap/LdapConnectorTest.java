@@ -35,6 +35,10 @@ class LdapConnectorTest {
         InMemoryDirectoryServerConfig cfg = new InMemoryDirectoryServerConfig("o=test");
         cfg.setSchema(null); // schema-less: accepts eDir/AD-style attributes
         cfg.addAdditionalBindCredentials("cn=admin,o=test", "secret");
+        // bind to loopback: the default listener's getConnection() dials the machine's
+        // hostname, which can resolve off-box (split/hijacking DNS) and time out
+        cfg.setListenerConfigs(com.unboundid.ldap.listener.InMemoryListenerConfig.createLDAPConfig(
+                "default", java.net.InetAddress.getLoopbackAddress(), 0, null));
         ds = new InMemoryDirectoryServer(cfg);
         ds.add("dn: o=test", "objectClass: top", "objectClass: organization", "o: test");
         for (String ou : List.of("edir-users", "edir-groups", "ad-users", "ad-groups", "ol-users")) {
@@ -349,9 +353,44 @@ class LdapConnectorTest {
     @Test
     void unsupportedFilterSignalsFallback() {
         assertThrows(UnsupportedFilterException.class, () -> edirUsers.search(new SearchRequest(
-                FilterParser.parse("emails[type eq \"work\"]"), 1, 10)));
+                FilterParser.parse("emails[primary eq true]"), 1, 10)));
         assertThrows(UnsupportedFilterException.class, () -> edirUsers.search(new SearchRequest(
                 FilterParser.parse("nosuchattr eq \"x\""), 1, 10)));
+    }
+
+    @Test
+    void emailFiltersPushDown() throws Exception {
+        String id = olUsers.create(user("ol.mail")).optString("id", null);
+        for (String f : List.of(
+                "emails.value eq \"OL.MAIL@example.com\"",
+                "emails eq \"ol.mail@example.com\"",
+                "emails[type eq \"work\" and value eq \"ol.mail@example.com\"]",
+                "emails[value sw \"ol.mail@\"]")) {
+            SearchResult r = olUsers.search(new SearchRequest(FilterParser.parse(f), 1, 10));
+            assertEquals(1, r.totalResults(), f);
+            assertEquals(id, r.resources().get(0).optString("id", null), f);
+        }
+        assertEquals(0, olUsers.search(new SearchRequest(FilterParser.parse(
+                "emails[type eq \"home\" and value eq \"ol.mail@example.com\"]"), 1, 10)).totalResults());
+    }
+
+    @Test
+    void metaTimestampFiltersPushDown() throws Exception {
+        // the in-memory server stamps createTimestamp/modifyTimestamp on add
+        String id = edirUsers.create(user("edir.meta")).optString("id", null);
+        assertNotNull(edirUsers.get(id).get("meta").asObject().optString("created", null));
+        String yesterday = java.time.Instant.now().minus(java.time.Duration.ofDays(1)).toString();
+        String tomorrow = java.time.Instant.now().plus(java.time.Duration.ofDays(1)).toString();
+
+        SearchResult recent = edirUsers.search(new SearchRequest(FilterParser.parse(
+                "userName eq \"edir.meta\" and meta.created ge \"" + yesterday + "\""), 1, 10));
+        assertEquals(1, recent.totalResults());
+        assertEquals(0, edirUsers.search(new SearchRequest(FilterParser.parse(
+                "userName eq \"edir.meta\" and meta.lastModified gt \"" + tomorrow + "\""), 1, 10))
+                .totalResults());
+        assertEquals(1, edirUsers.search(new SearchRequest(FilterParser.parse(
+                "userName eq \"edir.meta\" and meta.lastModified lt \"" + tomorrow + "\""), 1, 10))
+                .totalResults());
     }
 
     @Test

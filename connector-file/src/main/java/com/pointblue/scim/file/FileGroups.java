@@ -34,6 +34,7 @@ final class FileGroups implements ResourceBackend {
     private final FileConfig.Format format;
     private final FileUsers users;
     private final PatchEngine patchEngine;
+    private final FileMeta meta;
     private final FilterEvaluator evaluator =
             new FilterEvaluator(CoreSchemas.GROUP_URN, FilterEvaluator.CaseExactness.DEFAULT);
 
@@ -44,6 +45,7 @@ final class FileGroups implements ResourceBackend {
         this.format = format;
         this.users = users;
         this.patchEngine = new PatchEngine(registry, "Group");
+        this.meta = new FileMeta(table.columns);
         if (table.displayNameColumn == null) {
             throw new IllegalArgumentException("groups config requires 'displayNameColumn'");
         }
@@ -64,13 +66,7 @@ final class FileGroups implements ResourceBackend {
             members.add(m);
         }
         g.put("members", members);
-        JsonObject meta = new JsonObject();
-        meta.put("resourceType", "Group");
-        JsonValue created = record.getIgnoreCase("meta_created");
-        JsonValue modified = record.getIgnoreCase("meta_lastModified");
-        if (created != null && !created.isNull()) meta.put("created", created.asString());
-        if (modified != null && !modified.isNull()) meta.put("lastModified", modified.asString());
-        g.put("meta", meta);
+        g.put("meta", meta.toScim(record, "Group"));
         return g;
     }
 
@@ -120,8 +116,8 @@ final class FileGroups implements ResourceBackend {
         record.put(table.displayNameColumn, name);
         putMembers(record, memberIdsFrom(resource));
         String now = Instant.now().toString();
-        record.put("meta_created", now);
-        record.put("meta_lastModified", now);
+        meta.putCreated(record, now);
+        meta.putModified(record, now);
         store.add(record);
         return get(id);
     }
@@ -140,7 +136,7 @@ final class FileGroups implements ResourceBackend {
         String name = resource.optString("displayName", existing.optString(table.displayNameColumn, null));
         existing.put(table.displayNameColumn, name);
         putMembers(existing, memberIdsFrom(resource));
-        existing.put("meta_lastModified", Instant.now().toString());
+        meta.putModified(existing, Instant.now().toString());
         store.replace(table.idColumn, id, existing);
         return get(id);
     }
@@ -196,7 +192,7 @@ final class FileGroups implements ResourceBackend {
         }
         record.put(table.displayNameColumn, name);
         putMembers(record, new ArrayList<>(members));
-        record.put("meta_lastModified", Instant.now().toString());
+        meta.putModified(record, Instant.now().toString());
         store.replace(table.idColumn, id, record);
         return get(id);
     }

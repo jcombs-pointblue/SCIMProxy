@@ -33,17 +33,63 @@ final class LdapMapper {
     private final FilterEvaluator evaluator =
             new FilterEvaluator(CoreSchemas.USER_URN, FilterEvaluator.CaseExactness.DEFAULT);
 
+    /** "urn|attr" -> element shape key -> (lowercase sub-attribute -> target). */
+    private final Map<String, Map<String, Map<String, LdapFilters.Target>>> elements = new LinkedHashMap<>();
+
     LdapMapper(List<LdapConfig.Mapping> mappings) {
         for (LdapConfig.Mapping m : mappings) {
             AttributePath path = FilterParser.parsePath(m.scimPath());
             byKey.put(normalize(path), new Entry(path, m.ldapAttr()));
+            indexElement(path, m.ldapAttr());
         }
+        // constants need their element's presence test, known once all subs are in
+        for (Map<String, Map<String, LdapFilters.Target>> shapes : elements.values()) {
+            for (Map<String, LdapFilters.Target> element : shapes.values()) {
+                String presence = LdapFilters.presence(element);
+                element.replaceAll((sub, t) -> t.constant() == null ? t
+                        : LdapFilters.Target.constant(t.constant(), presence));
+            }
+        }
+    }
+
+    /**
+     * Records emails[type eq "work"].value -> mail as one element shape of
+     * "emails": {type: "work" (constant), value: mail}. Mappings sharing a value
+     * filter (addresses[type eq "work"].locality / .region) share a shape.
+     */
+    private void indexElement(AttributePath path, String ldapAttr) {
+        if (path.valueFilter() == null || path.subAttr() == null) return;
+        TreeMap<String, String> eq = new TreeMap<>();
+        if (!collectEq(path.valueFilter(), eq)) return;
+        Map<String, LdapFilters.Target> element = elements
+                .computeIfAbsent(attrKey(path), k -> new LinkedHashMap<>())
+                .computeIfAbsent(eq.toString(), k -> new LinkedHashMap<>());
+        eq.forEach((sub, v) -> element.putIfAbsent(sub, LdapFilters.Target.constant(new JsonString(v), null)));
+        element.put(path.subAttr().toLowerCase(), LdapFilters.Target.attr(ldapAttr));
     }
 
     /** LDAP attribute for a filter/patch path (no value filter); null if unmapped. */
     String ldapAttrFor(AttributePath path) {
         Entry e = byKey.get(normalize(path));
         return e == null ? null : e.ldapAttr();
+    }
+
+    /** Filter target for an exactly-mapped path, or null. */
+    LdapFilters.Target exact(AttributePath path) {
+        String a = ldapAttrFor(path);
+        return a == null ? null : LdapFilters.Target.attr(a);
+    }
+
+    /** Mapped element shapes of the multi-valued attribute at path. */
+    List<Map<String, LdapFilters.Target>> elements(AttributePath path) {
+        Map<String, Map<String, LdapFilters.Target>> shapes = elements.get(attrKey(path));
+        return shapes == null ? List.of() : List.copyOf(shapes.values());
+    }
+
+    private static String attrKey(AttributePath p) {
+        String urn = p.schemaUrn() == null || p.schemaUrn().equalsIgnoreCase(CoreSchemas.USER_URN)
+                ? "" : p.schemaUrn().toLowerCase();
+        return urn + "|" + p.attr().toLowerCase();
     }
 
     /**

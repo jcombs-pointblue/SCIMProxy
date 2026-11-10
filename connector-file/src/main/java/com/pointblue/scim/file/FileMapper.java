@@ -46,6 +46,7 @@ final class FileMapper {
             return a != null && a.caseExact();
         });
         mappings.forEach((scimPath, field) -> {
+            if (FileMeta.isMetaPath(scimPath)) return; // server-managed; see FileMeta
             AttributePath p = FilterParser.parsePath(scimPath);
             byKey.put(normalize(p), new Entry(p, field));
         });
