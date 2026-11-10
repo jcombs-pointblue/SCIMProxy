@@ -5,6 +5,7 @@ package com.pointblue.scim.ldap;
 import com.pointblue.scim.json.JsonArray;
 import com.pointblue.scim.json.JsonObject;
 import com.pointblue.scim.json.JsonValue;
+import com.pointblue.scim.model.AttributePath;
 import com.pointblue.scim.schema.CoreSchemas;
 
 import java.util.ArrayList;
@@ -67,6 +68,10 @@ public final class LdapConfig {
     public final int connectTimeoutMs;
     public final int readTimeoutMs;
     public final String referrals;   // ignore | follow | throw
+    // operational timestamps behind meta.created / meta.lastModified (read and filter)
+    public final String createdAttr;
+    public final String modifiedAttr;
+    public final LdapFilters.TimeSyntax timeSyntax;
 
     public LdapConfig(JsonObject cfg) {
         this.url = require(cfg, "url");
@@ -152,6 +157,12 @@ public final class LdapConfig {
             case "ignore", "follow", "throw" -> cfg.optString("referrals", "ignore");
             default -> throw new IllegalArgumentException("referrals must be ignore | follow | throw");
         };
+        // AD's createTimestamp/modifyTimestamp are constructed (not filterable); the
+        // stored whenCreated/whenChanged are, and take generalized time with a fraction
+        boolean ad = "ad".equals(flavor);
+        this.createdAttr = cfg.optString("createdAttr", ad ? "whenCreated" : "createTimestamp");
+        this.modifiedAttr = cfg.optString("modifiedAttr", ad ? "whenChanged" : "modifyTimestamp");
+        this.timeSyntax = ad ? LdapFilters.TimeSyntax.FRACTION : LdapFilters.TimeSyntax.WHOLE_SECONDS;
     }
 
     // ---- flavor presets ----
@@ -224,6 +235,18 @@ public final class LdapConfig {
                 List.of("top", "groupOfNames"), "(objectClass=groupOfNames)",
                 List.of(new MemberPair("member", null)),
                 "entryUUID", false, "nsAccountLock", "userPassword");
+    }
+
+    /**
+     * Filter target for meta.created / meta.lastModified (bare or qualified by
+     * the resource's base schema URN), or null for any other path.
+     */
+    LdapFilters.Target metaTarget(AttributePath p, String baseUrn) {
+        if (p.valueFilter() != null || p.subAttr() == null || !p.attr().equalsIgnoreCase("meta")) return null;
+        if (p.schemaUrn() != null && !p.schemaUrn().equalsIgnoreCase(baseUrn)) return null;
+        if (p.subAttr().equalsIgnoreCase("created")) return LdapFilters.Target.time(createdAttr, timeSyntax);
+        if (p.subAttr().equalsIgnoreCase("lastModified")) return LdapFilters.Target.time(modifiedAttr, timeSyntax);
+        return null;
     }
 
     // ---- helpers ----

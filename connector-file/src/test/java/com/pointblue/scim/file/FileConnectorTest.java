@@ -164,4 +164,57 @@ class FileConnectorTest {
         assertTrue(u1.optBoolean("active", false));
         assertFalse(users.get("u2").optBoolean("active", true));
     }
+
+    @Test
+    void metaColumnsFromExportAreReturnedAndFilterable() throws Exception {
+        // header uses the SCIM names directly, with no mapping configured
+        Files.writeString(dir.resolve("users.csv"),
+                "id,username,meta.created,meta.lastModified\n"
+              + "u1,old,2024-01-02T03:04:05Z,2024-06-01T00:00:00Z\n"
+              + "u2,new,2025-11-16T01:47:42.5Z,2025-11-16T01:47:43Z\n");
+        ResourceBackend users = backend("csv").resource("User");
+        JsonObject meta = users.get("u1").get("meta").asObject();
+        assertEquals("2024-01-02T03:04:05Z", meta.optString("created", null));
+        assertEquals("2024-06-01T00:00:00Z", meta.optString("lastModified", null));
+
+        SearchResult r = users.search(new SearchRequest(
+                FilterParser.parse("meta.created gt \"2025-11-16T01:47:42Z\""), 1, 10));
+        assertEquals(1, r.totalResults(), "fractional seconds compare chronologically");
+        assertEquals("u2", r.resources().get(0).optString("id", null));
+        assertEquals(2, users.search(new SearchRequest(
+                FilterParser.parse("meta.lastModified ge \"2024-01-01\""), 1, 10)).totalResults());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"csv", "json"})
+    void mappedMetaColumnsAreReadAndMaintained(String format) throws Exception {
+        String data = format.equals("csv")
+                ? "id,username,whenCreated,whenChanged\nu1,jsmith,2024-01-02T03:04:05Z,2024-06-01T00:00:00Z\n"
+                : "[{\"id\":\"u1\",\"username\":\"jsmith\",\"whenCreated\":\"2024-01-02T03:04:05Z\","
+                  + "\"whenChanged\":\"2024-06-01T00:00:00Z\"}]";
+        Files.writeString(dir.resolve("users." + format), data);
+        JsonObject cfg = Json.parseObject("""
+            {"type":"file","format":"%s",
+             "users":{"file":"%s/users.%s","idColumn":"id",
+               "columns":{"userName":"username","meta.created":"whenCreated",
+                          "meta.lastModified":"whenChanged"}}}
+            """.formatted(format, dir, format));
+        ResourceBackend users = new FileBackend(cfg, SchemaRegistry.withDefaults()).resource("User");
+
+        JsonObject meta = users.get("u1").get("meta").asObject();
+        assertEquals("User", meta.optString("resourceType", null));
+        assertEquals("2024-01-02T03:04:05Z", meta.optString("created", null), "mapped meta is not dropped");
+        assertEquals("2024-06-01T00:00:00Z", meta.optString("lastModified", null));
+
+        // a client-supplied meta is ignored; created is kept, lastModified is stamped
+        users.replace("u1", Json.parseObject("""
+            {"userName":"jsmith","meta":{"created":"1999-01-01T00:00:00Z"}}"""));
+        JsonObject after = users.get("u1").get("meta").asObject();
+        assertEquals("2024-01-02T03:04:05Z", after.optString("created", null));
+        assertNotEquals("2024-06-01T00:00:00Z", after.optString("lastModified", null));
+        String onDisk = Files.readString(dir.resolve("users." + format));
+        assertTrue(onDisk.contains("whenChanged"), "timestamps written to the mapped field");
+        assertFalse(onDisk.contains("meta_lastModified"), "no default meta field when mapped");
+        assertFalse(onDisk.contains("1999"), "client meta not persisted");
+    }
 }

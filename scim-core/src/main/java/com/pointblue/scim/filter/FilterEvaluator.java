@@ -10,6 +10,12 @@ import com.pointblue.scim.json.JsonString;
 import com.pointblue.scim.json.JsonValue;
 import com.pointblue.scim.model.AttributePath;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -125,6 +131,22 @@ public final class FilterEvaluator {
         if (literal.isNull()) return op == Op.EQ && value.isNull();
 
         if (value instanceof JsonString s && literal instanceof JsonString l) {
+            if (op == Op.EQ || op == Op.GT || op == Op.GE || op == Op.LT || op == Op.LE) {
+                // xsd:dateTime values compare chronologically, not lexically:
+                // "...42.5Z" is after "...42Z", and "+00:00" equals "Z"
+                Instant ta = parseDateTime(s.value());
+                Instant tb = ta == null ? null : parseDateTime(l.value());
+                if (tb != null) {
+                    int cmp = ta.compareTo(tb);
+                    return switch (op) {
+                        case EQ -> cmp == 0;
+                        case GT -> cmp > 0;
+                        case GE -> cmp >= 0;
+                        case LT -> cmp < 0;
+                        default -> cmp <= 0;
+                    };
+                }
+            }
             String a = s.value(), b = l.value();
             if (!caseExact) { a = a.toLowerCase(); b = b.toLowerCase(); }
             return switch (op) {
@@ -154,5 +176,34 @@ public final class FilterEvaluator {
             return op == Op.EQ && b.value() == l.value();
         }
         return false;
+    }
+
+    /**
+     * Parses an RFC 7643 dateTime (xsd:dateTime) to an instant, or null when the
+     * string is not one. Accepts an offset or "Z"; a value with no offset is read
+     * as UTC, and a bare date (2025-11-16) as midnight UTC.
+     */
+    public static Instant parseDateTime(String s) {
+        if (s == null || s.length() < 10 || !looksLikeDate(s)) return null;
+        try {
+            if (s.length() == 10) return LocalDate.parse(s).atStartOfDay(ZoneOffset.UTC).toInstant();
+            return OffsetDateTime.parse(s).toInstant();
+        } catch (DateTimeParseException e) {
+            try {
+                return LocalDateTime.parse(s).toInstant(ZoneOffset.UTC);
+            } catch (DateTimeParseException e2) {
+                return null;
+            }
+        }
+    }
+
+    /** Cheap shape check (yyyy-mm-dd prefix) so ordinary strings skip the parser. */
+    private static boolean looksLikeDate(String s) {
+        for (int i = 0; i < 10; i++) {
+            char c = s.charAt(i);
+            boolean ok = (i == 4 || i == 7) ? c == '-' : (c >= '0' && c <= '9');
+            if (!ok) return false;
+        }
+        return s.length() == 10 || s.charAt(10) == 'T' || s.charAt(10) == 't';
     }
 }

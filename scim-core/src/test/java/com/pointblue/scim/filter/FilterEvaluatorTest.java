@@ -82,6 +82,34 @@ class FilterEvaluatorTest {
     }
 
     @Test
+    void dateTimesCompareChronologically() {
+        JsonObject u = Json.parseObject("""
+                {"userName":"t","meta":{"created":"2025-11-16T01:47:42.500Z",
+                                        "lastModified":"2025-11-16T01:47:42Z"}}""");
+        // lexically "...42.500Z" < "...42Z"; chronologically it is later
+        assertTrue(eval.matches(FilterParser.parse("meta.created gt \"2025-11-16T01:47:42Z\""), u));
+        assertFalse(eval.matches(FilterParser.parse("meta.created le \"2025-11-16T01:47:42Z\""), u));
+        // same instant, different spelling
+        assertTrue(eval.matches(FilterParser.parse("meta.lastModified eq \"2025-11-16T01:47:42.000Z\""), u));
+        assertTrue(eval.matches(FilterParser.parse("meta.lastModified eq \"2025-11-15T20:47:42-05:00\""), u));
+        // bare date is midnight UTC
+        assertTrue(eval.matches(FilterParser.parse("meta.created ge \"2025-11-16\""), u));
+        assertFalse(eval.matches(FilterParser.parse("meta.created ge \"2025-11-17\""), u));
+        // non-date strings still compare lexically
+        assertTrue(eval.matches(FilterParser.parse("userName lt \"u\""), u));
+    }
+
+    @Test
+    void parseDateTimeAcceptsXsdForms() {
+        assertNotNull(FilterEvaluator.parseDateTime("2025-11-16T01:47:42Z"));
+        assertNotNull(FilterEvaluator.parseDateTime("2025-11-16T01:47:42.123+02:00"));
+        assertNotNull(FilterEvaluator.parseDateTime("2025-11-16T01:47:42"));
+        assertNotNull(FilterEvaluator.parseDateTime("2025-11-16"));
+        assertNull(FilterEvaluator.parseDateTime("bjensen"));
+        assertNull(FilterEvaluator.parseDateTime("2025-13-99"));
+    }
+
+    @Test
     void caseExactnessIsHonoredWhenSupplied() {
         FilterEvaluator exact = new FilterEvaluator(CoreSchemas.USER_URN, path -> true);
         assertFalse(exact.matches(FilterParser.parse("userName eq \"bjensen\""), user));

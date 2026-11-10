@@ -22,19 +22,23 @@ final class SqlFilter {
     /** A SQL fragment plus the values to bind into its {@code ?} placeholders. */
     record Sql(String where, List<JsonValue> params) {}
 
-    private final Function<AttributePath, String> columnFor;
+    private final Function<AttributePath, List<String>> columnsFor;
     private final Function<String, Integer> sqlTypeFor;
     private final StringBuilder sb = new StringBuilder();
     private final List<JsonValue> params = new ArrayList<>();
 
-    private SqlFilter(Function<AttributePath, String> columnFor, Function<String, Integer> sqlTypeFor) {
-        this.columnFor = columnFor;
+    private SqlFilter(Function<AttributePath, List<String>> columnsFor, Function<String, Integer> sqlTypeFor) {
+        this.columnsFor = columnsFor;
         this.sqlTypeFor = sqlTypeFor;
     }
 
-    static Sql translate(Filter filter, Function<AttributePath, String> columnFor,
+    /**
+     * @param columnsFor columns a path reads; several (emails.value over a work and
+     *                   a home column) are OR'd, matching SCIM's any-value semantics
+     */
+    static Sql translate(Filter filter, Function<AttributePath, List<String>> columnsFor,
                          Function<String, Integer> sqlTypeFor) {
-        SqlFilter t = new SqlFilter(columnFor, sqlTypeFor);
+        SqlFilter t = new SqlFilter(columnsFor, sqlTypeFor);
         t.emit(filter);
         return new Sql(t.sb.toString(), t.params);
     }
@@ -46,13 +50,23 @@ final class SqlFilter {
             case Filter.Not not -> { sb.append("(NOT "); emit(not.inner()); sb.append(')'); }
             case Filter.ValuePath vp -> throw new UnsupportedFilterException(
                     "value-path filters are not translatable to SQL");
-            case Filter.Present p -> sb.append(col(p.path())).append(" IS NOT NULL");
-            case Filter.Compare c -> emitCompare(c);
+            case Filter.Present p -> anyOf(cols(p.path()), column -> sb.append(column).append(" IS NOT NULL"));
+            case Filter.Compare c -> anyOf(cols(c.path()), column -> emitCompare(c, column));
         }
     }
 
-    private void emitCompare(Filter.Compare c) {
-        String column = col(c.path());
+    /** Emits one fragment per column, OR'd when there is more than one. */
+    private void anyOf(List<String> columns, java.util.function.Consumer<String> emitOne) {
+        if (columns.size() == 1) { emitOne.accept(columns.get(0)); return; }
+        sb.append('(');
+        for (int i = 0; i < columns.size(); i++) {
+            if (i > 0) sb.append(" OR ");
+            emitOne.accept(columns.get(i));
+        }
+        sb.append(')');
+    }
+
+    private void emitCompare(Filter.Compare c, String column) {
         boolean text = Db.isText(sqlTypeFor.apply(column));
         switch (c.op()) {
             case EQ -> { if (text) { sb.append("lower(").append(column).append(") = lower(?)"); } else { sb.append(column).append(" = ?"); } param(c.literal()); }
@@ -76,13 +90,15 @@ final class SqlFilter {
         params.add(com.pointblue.scim.json.JsonValue.of(pre + escaped + post));
     }
 
-    private String col(AttributePath path) {
+    private List<String> cols(AttributePath path) {
         if (path.valueFilter() != null) {
             throw new UnsupportedFilterException("value-path filters are not translatable to SQL");
         }
-        String column = columnFor.apply(path);
-        if (column == null) throw new UnsupportedFilterException("attribute " + path.display() + " has no column mapping");
-        return column;
+        List<String> columns = columnsFor.apply(path);
+        if (columns == null || columns.isEmpty()) {
+            throw new UnsupportedFilterException("attribute " + path.display() + " has no column mapping");
+        }
+        return columns;
     }
 
     private void param(JsonValue v) { params.add(v); }

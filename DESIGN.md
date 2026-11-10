@@ -206,7 +206,9 @@ a native query translation or `PushdownResult.UNSUPPORTED`, in which case the co
 **post-filters in memory** using `filter.Evaluator` over pages fetched from the
 backend. Pushdown-vs-fallback is per-AST-node-tree, not per-operator, so the common
 IdP probes (`userName eq "jdoe"`) always push down even when an exotic clause would
-not.
+not. The evaluator compares string values that both parse as xsd:dateTime
+chronologically (offsets normalized, fractional seconds honored, a bare date read as
+midnight UTC), so in-memory `meta.*` ordering matches what a backend would return.
 
 ### 7.3 PATCH engine
 
@@ -400,7 +402,11 @@ filters, attribute mapping, GUID attribute, membership model, and active strateg
 - **cn derivation:** `person` requires `cn`; when `uid` (not `cn`) is the RDN it is
   derived from displayName / formatted name / given+family.
 - **Group filter** excludes iManager RBS scope objects (`rbsScope`/`rbsScope2`) for
-  eDirectory. Filters translate to RFC 4515; value-path filters fall back in-core.
+  eDirectory. Filters translate to RFC 4515. Per-element mappings
+  (`emails[type eq "work"].value`) make `emails.value`, bare `emails`, and value paths
+  translatable (constants from the mapping's value filter fold to true/false);
+  `meta.created`/`lastModified` map to the flavor's timestamp attributes as generalized
+  time. Whatever remains unmapped falls back in-core.
 - **TLS:** LDAPS via JNDI; `insecureSkipTlsVerify` trusts any chain **and** disables
   hostname/IP identification (via the JVM system property JNDI honors). `referrals`
   (default `ignore`) plus tolerating the terminal `PartialResultException` handle AD
@@ -422,7 +428,8 @@ adding their driver. This is the one connector with a runtime dependency (its dr
 Stores Users/Groups in CSV or JSON files: a read source for an existing export, or a
 sink materializing provisioning as a file drop. SCIM-path → field mapping; stringly
 typed values coerced to the SCIM attribute type via the schema. Membership stored
-inline (delimited id list in CSV, array in JSON). Whole file in memory, filtered
+inline (delimited id list in CSV, array in JSON). `meta.*` defaults to
+`meta_created`/`meta_lastModified` fields or a mapped field. Whole file in memory, filtered
 there, written back atomically (temp + rename). Zero deps (built-in RFC 4180
 reader/writer).
 

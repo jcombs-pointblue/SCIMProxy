@@ -140,6 +140,19 @@ class JdbcConnectorTest {
     }
 
     @Test
+    void emailFiltersPushDownToTheMappedColumn() {
+        // emails is mapped as emails[type eq "work"].value; clients filter emails.value / emails
+        assertEquals(1, users.search(new SearchRequest(
+                FilterParser.parse("emails.value eq \"ALICE@example.com\""), 1, 10)).totalResults());
+        assertEquals(1, users.search(new SearchRequest(
+                FilterParser.parse("emails eq \"bob@example.com\""), 1, 10)).totalResults());
+        assertEquals(2, users.search(new SearchRequest(
+                FilterParser.parse("emails.value ew \"@example.com\""), 1, 10)).totalResults());
+        assertEquals(2, users.search(new SearchRequest(
+                FilterParser.parse("emails pr"), 1, 10)).totalResults());
+    }
+
+    @Test
     void filterInjectionIsParameterized() {
         // a hostile value must not break out of the parameter
         SearchResult r = users.search(new SearchRequest(

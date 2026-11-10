@@ -55,6 +55,8 @@ final class LdapGroups implements ResourceBackend {
         attrs.add("modifyTimestamp");
         attrs.add("whenCreated");
         attrs.add("whenChanged");
+        attrs.add(config.createdAttr);
+        attrs.add(config.modifiedAttr);
         this.returnAttrs = attrs.toArray(new String[0]);
     }
 
@@ -94,17 +96,12 @@ final class LdapGroups implements ResourceBackend {
         }
         JsonObject meta = new JsonObject();
         meta.put("resourceType", "Group");
-        String created = LdapStore.toIso(first(entry, "createTimestamp", "whenCreated"));
-        String modified = LdapStore.toIso(first(entry, "modifyTimestamp", "whenChanged"));
+        String created = LdapStore.toIso(LdapUsers.coalesce(entry, config.createdAttr, "createTimestamp", "whenCreated"));
+        String modified = LdapStore.toIso(LdapUsers.coalesce(entry, config.modifiedAttr, "modifyTimestamp", "whenChanged"));
         if (created != null) meta.put("created", created);
         if (modified != null) meta.put("lastModified", modified);
         scim.put("meta", meta);
         return scim;
-    }
-
-    private static String first(LdapStore.Entry e, String a, String b) {
-        String v = e.first(a);
-        return v != null ? v : e.first(b);
     }
 
     // ---- CRUD ----
@@ -181,7 +178,7 @@ final class LdapGroups implements ResourceBackend {
     public SearchResult search(SearchRequest request) {
         String filter = config.groupFilter;
         if (request.filter() != null) {
-            filter = "(&" + filter + LdapFilters.toLdap(request.filter(), this::groupAttr) + ")";
+            filter = "(&" + filter + LdapFilters.toLdap(request.filter(), this::groupTarget) + ")";
         }
         LdapStore.Page page = store.search(groupBase(), filter, returnAttrs,
                 request.startIndex(), request.count());
@@ -190,11 +187,11 @@ final class LdapGroups implements ResourceBackend {
         return new SearchResult(resources, page.total());
     }
 
-    private String groupAttr(AttributePath path) {
-        if (path.subAttr() == null && path.attr().equalsIgnoreCase("displayName")) {
-            return config.groupRdnAttr;
+    private LdapFilters.Target groupTarget(AttributePath path) {
+        if (path.valueFilter() == null && path.subAttr() == null && path.attr().equalsIgnoreCase("displayName")) {
+            return LdapFilters.Target.attr(config.groupRdnAttr);
         }
-        return null;
+        return config.metaTarget(path, CoreSchemas.GROUP_URN);
     }
 
     // ---- PATCH ----

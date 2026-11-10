@@ -152,7 +152,7 @@ final class JdbcUsers implements ResourceBackend {
     public SearchResult search(SearchRequest request) {
         List<String> cols = selectColumns();
         SqlFilter.Sql where = request.filter() == null ? null
-                : SqlFilter.translate(request.filter(), map::column, map::sqlType);
+                : SqlFilter.translate(request.filter(), map::filterColumns, map::sqlType);
         String whereClause = where == null ? "" : " WHERE " + where.where();
         int offset = request.startIndex() - 1;
         int limit = request.count();

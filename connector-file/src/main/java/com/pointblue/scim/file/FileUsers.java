@@ -23,12 +23,14 @@ final class FileUsers implements ResourceBackend {
     private final FileConfig.Table table;
     private final FileMapper mapper;
     private final String resourceType;
+    private final FileMeta meta;
 
     FileUsers(RecordFile store, FileConfig.Table table, FileMapper mapper, String resourceType) {
         this.store = store;
         this.table = table;
         this.mapper = mapper;
         this.resourceType = resourceType;
+        this.meta = new FileMeta(table.columns);
     }
 
     FileMapper mapper() { return mapper; }
@@ -38,17 +40,8 @@ final class FileUsers implements ResourceBackend {
         JsonObject scim = mapper.toScim(record);
         JsonValue id = record.getIgnoreCase(table.idColumn);
         if (id != null && !id.isNull()) scim.put("id", id.asString());
-        JsonObject meta = new JsonObject();
-        meta.put("resourceType", resourceType);
-        copyMeta(record, "created", meta);
-        copyMeta(record, "lastModified", meta);
-        scim.put("meta", meta);
+        scim.put("meta", meta.toScim(record, resourceType));
         return scim;
-    }
-
-    private void copyMeta(JsonObject record, String key, JsonObject meta) {
-        JsonValue v = record.getIgnoreCase("meta_" + key);
-        if (v != null && !v.isNull()) meta.put(key, v.asString());
     }
 
     @Override
@@ -57,8 +50,8 @@ final class FileUsers implements ResourceBackend {
         String id = UUID.randomUUID().toString();
         record.put(table.idColumn, id);
         String now = Instant.now().toString();
-        record.put("meta_created", now);
-        record.put("meta_lastModified", now);
+        meta.putCreated(record, now);
+        meta.putModified(record, now);
         // uniqueness: userName must be unique if it is mapped
         checkUnique(resource, null);
         store.add(record);
@@ -79,9 +72,10 @@ final class FileUsers implements ResourceBackend {
         checkUnique(resource, id);
         JsonObject record = mapper.toRecord(resource, false);
         record.put(table.idColumn, id);
-        JsonValue created = existing.getIgnoreCase("meta_created");
-        record.put("meta_created", created == null ? Instant.now().toString() : created.asString());
-        record.put("meta_lastModified", Instant.now().toString());
+        String now = Instant.now().toString();
+        String created = meta.created(existing);
+        meta.putCreated(record, created == null ? now : created);
+        meta.putModified(record, now);
         store.replace(table.idColumn, id, record);
         return get(id);
     }

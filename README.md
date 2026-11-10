@@ -17,7 +17,7 @@ only. See [DESIGN.md](DESIGN.md) for the full design.
   table mapping, PostgreSQL bundled), `file` (CSV / JSON). Each rides the same SPI
   and inherits the full protocol layer.
 - **Validated live:** Okta (Preview org), eDirectory 9.3, Active Directory, 389
-  Directory Server, PostgreSQL 17 — see [TESTING.md](TESTING.md). 113 tests total.
+  Directory Server, PostgreSQL 17 — see [TESTING.md](TESTING.md). 130 tests total.
 - **Next:** `/Bulk`, ETags; generic REST connector and more LDAP flavor presets as
   targets arise. TLS is terminated at a reverse proxy / ingress (see
   [Deployment](#deployment)), not in-process.
@@ -193,8 +193,15 @@ The eDirectory group filter excludes iManager Role-Based Services scope objects
 appear as bogus groups. Override `groups.filter` if your tree needs different
 exclusions.
 
-Other behaviors: SCIM filters translate to RFC 4515 LDAP filters (value-path
-filters fall back to in-memory evaluation); renames happen via modify-DN when the
+Other behaviors: SCIM filters translate to RFC 4515 LDAP filters. Multi-valued
+attributes mapped per element are filterable the ways clients send them —
+`emails.value eq "x"`, `emails eq "x"`, `emails[type eq "work" and value eq "x"]` —
+each OR'ing every mapped element (`mail`, plus any other `emails[...]` mapping).
+`meta.created` / `meta.lastModified` push down as generalized-time comparisons on
+`whenCreated`/`whenChanged` (AD) or `createTimestamp`/`modifyTimestamp` (others;
+override with `createdAttr`/`modifiedAttr`), e.g. `meta.created ge
+"2025-11-16T01:47:42Z"` → `(whenCreated>=20251116014742.0Z)`. Anything still
+unexpressible falls back to in-memory evaluation. Renames happen via modify-DN when the
 RDN-source attribute changes, and the SCIM id (directory GUID) survives them;
 `deleteBehavior: "disable"` deactivates instead of deleting entries. On create, `cn`
 (required by the `person` object class) is derived from `displayName` / formatted
@@ -240,7 +247,8 @@ no SCIM of their own. Describe the tables and a SCIM-path → column mapping; th
 connector discovers column types from the catalog and needs no other schema knowledge.
 
 - `users.columns` maps SCIM paths to columns; a multi-valued attribute is addressed by
-  a value-filter path (`emails[type eq "work"].value`). The `idColumn` is the SCIM id;
+  a value-filter path (`emails[type eq "work"].value`), and filters on `emails.value`
+  or `emails` push down to every column mapped that way. The `idColumn` is the SCIM id;
   auto-generated keys (serial/identity/`uuid DEFAULT …`) are read back on insert.
 - `groups` needs a `displayNameColumn` and a `membership` join table
   (`groupColumn`/`userColumn`); members are resolved through it and included in list
@@ -262,6 +270,13 @@ sink that materializes provisioning as a file drop for downstream systems.
 - `format` is `csv` or `json`; each resource type is one file with a SCIM-path →
   field mapping. Values are stringly typed and coerced to the SCIM attribute type
   (e.g. `active` "true"/"false" → boolean) using the schema.
+- `meta.created` / `meta.lastModified` live in `meta_created` / `meta_lastModified`
+  fields by default. Map `meta.created` / `meta.lastModified` in `columns` to use an
+  existing field instead (e.g. an export's `whenCreated`); a field literally named
+  `meta.created` / `meta.lastModified` is also read. The server stamps these on
+  create/update (client-supplied `meta` is ignored), and they are filterable —
+  dateTime comparisons are chronological, so `meta.lastModified gt "…"` works for
+  incremental reads.
 - The `idColumn` holds the SCIM id (a UUID is generated on create). Group membership
   is stored inline in `membersColumn` — a delimited id list in CSV, a JSON array in
   JSON — and member display names are resolved from the users file.

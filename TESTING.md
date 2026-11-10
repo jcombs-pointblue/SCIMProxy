@@ -6,7 +6,7 @@ runbooks for validating a connector against a real target system.
 ## Automated tests
 
 ```sh
-mvn test        # 113 tests across all modules
+mvn test        # 130 tests across all modules
 ```
 
 | Module | What it covers | Test doubles |
@@ -14,9 +14,9 @@ mvn test        # 113 tests across all modules
 | `scim-core` | JSON round-trip, RFC 7644 filter parser/evaluator, PATCH engine, schema validation | none |
 | `scim-server` | full SCIM surface over real HTTP (Users/Groups CRUD, PATCH, `.search`, projection, pagination, auth, discovery); in-memory-filter fallback | `InMemoryBackend` |
 | `connector-okta` | user/group CRUD, PATCH, lifecycle, filter pushdown, pagination, auth (both JWT and client-secret), error translation | `FakeOkta` (JDK HttpServer) |
-| `connector-ldap` | eDirectory/AD/OpenLDAP flavors, membership pairs, active strategies, AD create ordering, RBS group exclusion, cn derivation, rename, filter escaping, LDAPS/referral/timeout env wiring | UnboundID in-memory LDAP server (test scope) |
-| `connector-jdbc` | table/column mapping, CRUD, SQL filter pushdown, injection safety, unique conflict, groups via join table, pagination | H2 in-memory (PostgreSQL mode, test scope) |
-| `connector-file` | CSV + JSON (parameterized) CRUD, RFC 4180 parsing, type coercion, filter/pagination, uniqueness, inline group membership, reads a hand-written export | temp files |
+| `connector-ldap` | eDirectory/AD/OpenLDAP flavors, membership pairs, active strategies, AD create ordering, RBS group exclusion, cn derivation, rename, filter escaping, `emails`/`meta.*` filter pushdown (incl. generalized-time rounding), LDAPS/referral/timeout env wiring | UnboundID in-memory LDAP server (test scope) |
+| `connector-jdbc` | table/column mapping, CRUD, SQL filter pushdown (incl. `emails.value`), injection safety, unique conflict, groups via join table, pagination | H2 in-memory (PostgreSQL mode, test scope) |
+| `connector-file` | CSV + JSON (parameterized) CRUD, RFC 4180 parsing, type coercion, filter/pagination, uniqueness, inline group membership, reads a hand-written export, default and mapped `meta.*` fields | temp files |
 
 No live systems are touched by `mvn test`. The connector test doubles imitate the
 real API/protocol closely enough to exercise the mapping and translation logic, but
