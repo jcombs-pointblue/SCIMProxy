@@ -26,7 +26,7 @@ only. See [DESIGN.md](DESIGN.md) for the full design.
 
 ```sh
 mvn package
-java -jar scim-server/target/scim-server-1.0.0.jar [config-file]
+java -jar scim-server/target/scim-server-1.1.0.jar [config-file]
 ```
 
 With no config file the server starts in **dev mode**: in-memory backend, HTTP on

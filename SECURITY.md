@@ -26,7 +26,7 @@ Areas especially worth scrutiny:
 ## Supported versions
 
 Security fixes are applied to the latest `1.x` release and land on `main`. Pin to a
-tagged release (e.g. `v1.0.0`) for reproducible builds, and upgrade to the newest
+tagged release (e.g. `v1.1.0`) for reproducible builds, and upgrade to the newest
 `1.x` to receive fixes.
 
 ## Operational notes
